@@ -1,5 +1,6 @@
 import type { Observation, ObservationKind } from "../observations/observations";
 import { OBSERVATIONS } from "../observations/observations";
+import { PEOPLE_OBSERVATIONS } from "../observations/people-observations";
 import { WORLD_NOW } from "../timeline/world-clock";
 
 // Ground Truth ist der formale Vertrag zwischen der simulierten Unternehmenswelt und
@@ -113,6 +114,20 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   "loss-reason-concentration": "unterstuetzend",
   "chance-account-repeat-business": "unterstuetzend",
   "pipeline-synthesis": "unterstuetzend",
+
+  // People-Domäne (Reference World v2, Schritt "People Foundation"): additive
+  // Einträge, vom Compiler erzwungen (derselbe Record<ObservationKind, Tier>-
+  // Vollständigkeitszwang wie oben). "unbesetzt" (severity hoch, eine bereits
+  // eingetretene Situation) erhält "primaer" — strukturell analog zu
+  // biggest-stagnant-opportunity, dem einzigen bisherigen primaer-Fund: ein konkreter,
+  // bereits eingetretener Zustand, kein Trend. "letzte Person verbleibt" (severity
+  // mittel, ein Risiko-Vorbote ohne bereits eingetretenen Ausfall) erhält "sekundaer",
+  // analog zu den übrigen strukturellen mittel-Befunden. Diese Einträge wirken sich in
+  // der bestehenden Sales-Ground-Truth (GROUND_TRUTH_SNAPSHOTS, gespeist aus OBSERVATIONS)
+  // nicht aus: People-Observations laufen über eine eigene, separate
+  // Ground-Truth-Auswertung (siehe PEOPLE_GROUND_TRUTH_SNAPSHOTS), nicht über diese.
+  "people-critical-role-unstaffed": "primaer",
+  "people-critical-role-last-person": "sekundaer",
 };
 
 // Rein redaktionelle Zuordnung bereits bestehender Observation-Kinds zu thematisch
@@ -144,6 +159,11 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // ehrliche Gruppenbezeichnung. Der Gruppierungsmechanismus selbst (buildObservation
   // Groups) ist dafür bereits vollständig generisch und unverändert.
   "lead-volume-trend": "Volumen",
+
+  // People-Domäne: additiv, vom Compiler erzwungen (s. o.). Eigene, neue Gruppe
+  // "Team-Kontinuität" — keine der bestehenden Sales-Gruppen passt inhaltlich.
+  "people-critical-role-unstaffed": "Team-Kontinuität",
+  "people-critical-role-last-person": "Team-Kontinuität",
 };
 
 function buildObservationGroups(observations: readonly Observation[]): ObservationGroup[] {
@@ -201,3 +221,16 @@ export function generateGroundTruthSnapshot(observations: readonly Observation[]
 // würden erfundene zeitliche Variation voraussetzen, die die Welt nicht hergibt —
 // das widerspräche "Ground Truth erzeugt keinerlei neue Erkenntnisse".
 export const GROUND_TRUTH_SNAPSHOTS: GroundTruthSnapshot[] = [generateGroundTruthSnapshot(OBSERVATIONS, WORLD_NOW)];
+
+// People Foundation (Reference World v2, Schritt 1): eigene, separate Ground-Truth-
+// Auswertung für People-Observations — bewusst NICHT in GROUND_TRUTH_SNAPSHOTS
+// gemischt. Eine Zusammenführung über Domänen hinweg ist ausdrücklich Aufgabe der
+// hier noch nicht implementierten Company-Aggregationsebene; diese Trennung hält die
+// bestehende Sales-Ground-Truth unverändert (Prinzip 13, Wartbarkeit) und vermeidet
+// eine verfrühte, an dieser Stelle nicht beauftragte Architekturentscheidung.
+// generateGroundTruthSnapshot() selbst ist bereits vollständig domänenneutral (nimmt
+// nur Observation[] + timestamp) — keine neue Ground-Truth-Logik, nur ein zweiter
+// Aufruf derselben Funktion.
+export const PEOPLE_GROUND_TRUTH_SNAPSHOTS: GroundTruthSnapshot[] = [
+  generateGroundTruthSnapshot(PEOPLE_OBSERVATIONS, WORLD_NOW),
+];

@@ -42,7 +42,13 @@ export type ObservationKind =
   | "sales-cycle-duration"
   | "stage-regression-rate"
   | "loss-reason-concentration"
-  | "lead-volume-trend";
+  | "lead-volume-trend"
+  // People-Domäne (Reference World v2, Schritt "People Foundation"): additive
+  // Erweiterung derselben Union, keine neue Taxonomie. Erzeugt ausschließlich in
+  // observations/people-observations.ts, aus EmployeeTerminated-Events — nicht aus
+  // den Sales-Rohdaten unten. Siehe dort für die vollständige Herleitung.
+  | "people-critical-role-last-person"
+  | "people-critical-role-unstaffed";
 
 export interface Observation {
   id: string;

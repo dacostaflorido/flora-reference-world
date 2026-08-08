@@ -1,4 +1,5 @@
 import type { Employee } from "../world/employees";
+import type { EmployeeHired, EmployeeTerminated } from "../events/employee-lifecycle";
 import type { CustomerAccount } from "../world/customer-accounts";
 import type { Contact } from "../world/contacts";
 import type { AccountOwnership } from "../world/account-ownership";
@@ -58,6 +59,13 @@ export interface WorldSnapshot {
   asOf: string;
 
   employees: Employee[];
+  // People Foundation (Reference World v2, Schritt 1): reine Existenz-Filterung wie
+  // bei jeder anderen dynamischen Entität in Kategorie 1 oben — ein
+  // EmployeeTerminated-Event mit terminatedAt > asOf ist zu asOf noch nicht
+  // eingetreten und darf im Snapshot nicht erscheinen (Backward Explainability,
+  // Prinzip 18: kein Snapshot darf ein Ereignis kennen, das noch nicht existiert).
+  employeeHiredEvents: EmployeeHired[];
+  employeeTerminatedEvents: EmployeeTerminated[];
   customerAccounts: CustomerAccount[];
   contacts: Contact[];
   accountOwnerships: AccountOwnership[];
@@ -79,6 +87,8 @@ export interface WorldSnapshot {
 // Stammdaten separat übergeben werden, da sie kein Teil von ScenarioWorld sind.
 export interface WorldSnapshotSource {
   employees: readonly Employee[];
+  employeeHiredEvents: readonly EmployeeHired[];
+  employeeTerminatedEvents: readonly EmployeeTerminated[];
   customerAccounts: readonly CustomerAccount[];
   contacts: readonly Contact[];
   accountOwnerships: readonly AccountOwnership[];
@@ -95,6 +105,8 @@ export interface WorldSnapshotSource {
 
 export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string): WorldSnapshot {
   const employees = world.employees.filter((e) => e.hiredAt <= asOf);
+  const employeeHiredEvents = world.employeeHiredEvents.filter((e) => e.hiredAt <= asOf);
+  const employeeTerminatedEvents = world.employeeTerminatedEvents.filter((e) => e.terminatedAt <= asOf);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -147,6 +159,8 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   return {
     asOf,
     employees,
+    employeeHiredEvents,
+    employeeTerminatedEvents,
     customerAccounts,
     contacts,
     accountOwnerships,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateWorldSnapshot, type WorldSnapshotSource, type WorldSnapshot } from "../snapshot/snapshot";
 import { EMPLOYEES } from "../world/employees";
+import { EMPLOYEE_HIRED_EVENTS, EMPLOYEE_TERMINATED_EVENTS } from "../events/employee-lifecycle";
 import { CUSTOMER_ACCOUNTS } from "../world/customer-accounts";
 import { CONTACTS } from "../world/contacts";
 import { WORLD_NOW, WORLD_TIMELINE_START } from "../timeline/world-clock";
@@ -17,6 +18,8 @@ function toSource(worldId: (typeof SCENARIO_PROFILES)[number]["id"]): WorldSnaps
   const world = SCENARIO_WORLDS[worldId];
   return {
     employees: EMPLOYEES,
+    employeeHiredEvents: EMPLOYEE_HIRED_EVENTS,
+    employeeTerminatedEvents: EMPLOYEE_TERMINATED_EVENTS,
     customerAccounts: CUSTOMER_ACCOUNTS,
     contacts: CONTACTS,
     accountOwnerships: world.accountOwnerships,

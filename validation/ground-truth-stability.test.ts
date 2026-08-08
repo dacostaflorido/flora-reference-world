@@ -138,6 +138,12 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       "loss-reason-concentration": "unterstuetzend",
       "chance-account-repeat-business": "unterstuetzend",
       "pipeline-synthesis": "unterstuetzend",
+      // People Foundation: additiv, s. GROUND_TRUTH_PRIORITIES in ground-truth.ts.
+      // world.observations (SCENARIO_WORLDS) enthält nie People-Kinds — diese
+      // Einträge werden in diesem Test nie tatsächlich abgefragt, sind aber für die
+      // Record<ObservationKind, ...>-Vollständigkeit erforderlich.
+      "people-critical-role-unstaffed": "primaer",
+      "people-critical-role-last-person": "sekundaer",
     };
 
     for (const profile of SCENARIO_PROFILES) {
@@ -168,6 +174,9 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       "chance-account-repeat-business": "Accounts",
       "touchpoint-richness-won-vs-lost": "Accounts",
       "lead-volume-trend": "Volumen",
+      // People Foundation: additiv, s. OBSERVATION_GROUP_LABELS in ground-truth.ts.
+      "people-critical-role-unstaffed": "Team-Kontinuität",
+      "people-critical-role-last-person": "Team-Kontinuität",
     };
 
     for (const profile of SCENARIO_PROFILES) {
