@@ -1,0 +1,16 @@
+{
+  "name": "flora-reference-world",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Isolated, deterministic Sales reference world for development, UX research, and demos. Not part of the Flora product. See PRINCIPLES.md.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.10"
+  }
+}
