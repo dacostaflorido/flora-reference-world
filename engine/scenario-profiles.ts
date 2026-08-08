@@ -28,6 +28,26 @@ export interface ScenarioProfile {
   description: string;
 
   sales: SalesScenarioConfig;
+
+  // Operations Foundation (Reference World v2, Schritt 2, Phase 12): erstes
+  // tatsächlich genutztes Beispiel des oben beschriebenen Erweiterungspunkts — ein
+  // weiteres, eigenständig benanntes Feld, ohne `sales` anzufassen oder
+  // ScenarioProfile grundlegend umzubauen.
+  operations: OperationsScenarioConfig;
+}
+
+// Analog zu SalesScenarioConfig.overloadedEmployeeIds/overloadWeightMultiplier
+// (team-engpass) — bewusst dieselbe, bereits validierte Mechanik wiederverwendet
+// statt einer neuen erfunden: ein zusätzliches Gewicht bei der ohnehin bereits
+// lastgewichteten Zuteilung (world/delivery-units.ts, pickByInverseLoad), keine neue
+// Architektur, keine Zufallsquote, kein verstecktes Magic-Number. assignmentStrategy
+// ist die benannte, lesbare Außenschicht darüber ("balanced" = wirkungslos, leere
+// concentratedEmployeeIds/Multiplier 1 — identisch zum bisherigen Verhalten;
+// "concentrated" = dieselbe Gewichtungs-Mechanik, jetzt mit Wirkung).
+export interface OperationsScenarioConfig {
+  assignmentStrategy: "balanced" | "concentrated";
+  concentratedEmployeeIds: readonly string[];
+  concentrationWeightMultiplier: number;
 }
 
 // Alle Stellhebel dieses Blocks sind Sales-Pipeline-Vokabular (Leads, Opportunities,
@@ -102,6 +122,7 @@ export const BASELINE_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: [],
     overloadWeightMultiplier: 1,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 export const OPERATIVER_FOKUS_PROFILE: ScenarioProfile = {
@@ -132,6 +153,7 @@ export const OPERATIVER_FOKUS_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: [],
     overloadWeightMultiplier: 1,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 export const STRATEGISCHER_TAG_PROFILE: ScenarioProfile = {
@@ -158,6 +180,7 @@ export const STRATEGISCHER_TAG_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: [],
     overloadWeightMultiplier: 1,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 export const WACHSTUMSDRUCK_PROFILE: ScenarioProfile = {
@@ -178,6 +201,7 @@ export const WACHSTUMSDRUCK_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: [],
     overloadWeightMultiplier: 1,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 // Bewusst konkrete, real existierende Employee-IDs — eine dokumentierte, gezielte
@@ -205,6 +229,7 @@ export const TEAM_ENGPASS_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: ["emp-ole-jansen", "emp-lukas-hansen"],
     overloadWeightMultiplier: 4,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 export const PIPELINE_RISIKO_PROFILE: ScenarioProfile = {
@@ -230,6 +255,7 @@ export const PIPELINE_RISIKO_PROFILE: ScenarioProfile = {
     overloadedEmployeeIds: [],
     overloadWeightMultiplier: 1,
   },
+  operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
 };
 
 export const SCENARIO_PROFILES: readonly ScenarioProfile[] = [

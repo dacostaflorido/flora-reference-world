@@ -144,6 +144,8 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // Record<ObservationKind, ...>-Vollständigkeit erforderlich.
       "people-critical-role-unstaffed": "primaer",
       "people-critical-role-last-person": "sekundaer",
+      // Operations Foundation: additiv, s. GROUND_TRUTH_PRIORITIES in ground-truth.ts.
+      "operations-delivery-fair-share": "unterstuetzend",
     };
 
     for (const profile of SCENARIO_PROFILES) {
@@ -177,6 +179,8 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // People Foundation: additiv, s. OBSERVATION_GROUP_LABELS in ground-truth.ts.
       "people-critical-role-unstaffed": "Team-Kontinuität",
       "people-critical-role-last-person": "Team-Kontinuität",
+      // Operations Foundation: additiv, s. OBSERVATION_GROUP_LABELS in ground-truth.ts.
+      "operations-delivery-fair-share": "Delivery",
     };
 
     for (const profile of SCENARIO_PROFILES) {

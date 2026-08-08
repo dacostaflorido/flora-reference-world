@@ -20,6 +20,7 @@ function toSource(worldId: (typeof SCENARIO_PROFILES)[number]["id"]): WorldSnaps
     employees: EMPLOYEES,
     employeeHiredEvents: EMPLOYEE_HIRED_EVENTS,
     employeeTerminatedEvents: EMPLOYEE_TERMINATED_EVENTS,
+    deliveryUnits: world.deliveryUnits,
     customerAccounts: CUSTOMER_ACCOUNTS,
     contacts: CONTACTS,
     accountOwnerships: world.accountOwnerships,

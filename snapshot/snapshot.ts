@@ -1,5 +1,7 @@
 import type { Employee } from "../world/employees";
 import type { EmployeeHired, EmployeeTerminated } from "../events/employee-lifecycle";
+import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
+import { generateOperationsDeliveryFairShareObservation, type OperationsObservation } from "../observations/operations-observations";
 import type { CustomerAccount } from "../world/customer-accounts";
 import type { Contact } from "../world/contacts";
 import type { AccountOwnership } from "../world/account-ownership";
@@ -66,6 +68,18 @@ export interface WorldSnapshot {
   // Prinzip 18: kein Snapshot darf ein Ereignis kennen, das noch nicht existiert).
   employeeHiredEvents: EmployeeHired[];
   employeeTerminatedEvents: EmployeeTerminated[];
+  // Operations Foundation (Reference World v2, Schritt 2, Phase 14): dieselbe
+  // Existenz-Filterung wie oben — eine DeliveryUnit mit startDate (=
+  // Opportunity.closedAt) > asOf ist zu asOf noch nicht entstanden (keine
+  // zukünftigen Won-Deals/Abschlüsse im Snapshot sichtbar).
+  deliveryUnits: DeliveryUnit[];
+  // Abgeleitete, zeitpunktbezogene Sicht (Phase 6, isDeliveryUnitActiveAt) — stets
+  // eine Teilmenge von deliveryUnits oben, keine zusätzliche Erkenntnis.
+  activeDeliveryUnits: DeliveryUnit[];
+  // Operations-Fair-Share-Fakt zu asOf, ausschließlich aus activeDeliveryUnits
+  // abgeleitet (Backward Explainability) — undefined nur, wenn zu asOf keine aktiven
+  // Operations-Mitarbeiter existieren.
+  operationsObservation: OperationsObservation | undefined;
   customerAccounts: CustomerAccount[];
   contacts: Contact[];
   accountOwnerships: AccountOwnership[];
@@ -89,6 +103,7 @@ export interface WorldSnapshotSource {
   employees: readonly Employee[];
   employeeHiredEvents: readonly EmployeeHired[];
   employeeTerminatedEvents: readonly EmployeeTerminated[];
+  deliveryUnits: readonly DeliveryUnit[];
   customerAccounts: readonly CustomerAccount[];
   contacts: readonly Contact[];
   accountOwnerships: readonly AccountOwnership[];
@@ -107,6 +122,9 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const employees = world.employees.filter((e) => e.hiredAt <= asOf);
   const employeeHiredEvents = world.employeeHiredEvents.filter((e) => e.hiredAt <= asOf);
   const employeeTerminatedEvents = world.employeeTerminatedEvents.filter((e) => e.terminatedAt <= asOf);
+  const deliveryUnits = world.deliveryUnits.filter((u) => u.startDate <= asOf);
+  const activeDeliveryUnits = activeDeliveryUnitsAt(deliveryUnits, asOf);
+  const operationsObservation = generateOperationsDeliveryFairShareObservation(deliveryUnits, world.employees, asOf);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -161,6 +179,9 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     employees,
     employeeHiredEvents,
     employeeTerminatedEvents,
+    deliveryUnits,
+    activeDeliveryUnits,
+    operationsObservation,
     customerAccounts,
     contacts,
     accountOwnerships,

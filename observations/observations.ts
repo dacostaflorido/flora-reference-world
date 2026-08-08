@@ -48,7 +48,16 @@ export type ObservationKind =
   // observations/people-observations.ts, aus EmployeeTerminated-Events — nicht aus
   // den Sales-Rohdaten unten. Siehe dort für die vollständige Herleitung.
   | "people-critical-role-last-person"
-  | "people-critical-role-unstaffed";
+  | "people-critical-role-unstaffed"
+  // Operations-Domäne (Reference World v2, Schritt "Operations Foundation"):
+  // additiv, keine neue Taxonomie. Erzeugt ausschließlich in
+  // observations/operations-observations.ts, aus aktiven DeliveryUnits — bewusst
+  // NICHT über das Observation-Interface selbst transportiert (keine Severity-
+  // Bewertung, freigegebene Domain Decision), sondern über die separate
+  // OperationsObservation-Struktur. Der Kind-Wert ist hier trotzdem Teil derselben
+  // Union, damit Ground Truth (ground-truth.ts, ObservationLike) denselben
+  // generischen Mechanismus (Priorität/Gruppierung nach kind) verwenden kann.
+  | "operations-delivery-fair-share";
 
 export interface Observation {
   id: string;

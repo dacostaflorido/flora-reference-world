@@ -278,6 +278,7 @@ describe("Snapshot-Integration: keine Zukunftskenntnis (Prinzip 18)", () => {
       employees: EMPLOYEES,
       employeeHiredEvents: EMPLOYEE_HIRED_EVENTS,
       employeeTerminatedEvents: EMPLOYEE_TERMINATED_EVENTS,
+      deliveryUnits: world.deliveryUnits,
       customerAccounts: CUSTOMER_ACCOUNTS,
       contacts: CONTACTS,
       accountOwnerships: world.accountOwnerships,

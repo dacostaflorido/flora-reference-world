@@ -15,6 +15,7 @@ import type { Meeting } from "../events/meetings";
 import type { MeetingTranscript } from "../events/meeting-transcripts";
 import type { CrmActivity } from "../events/crm-activities";
 import { generateKnowledgeObjects, type KnowledgeObject } from "../world/knowledge-objects";
+import { generateDeliveryUnits, type DeliveryUnit } from "../world/delivery-units";
 import { generateObservations, type Observation } from "../observations/observations";
 import { generateGroundTruthSnapshot, type GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -55,6 +56,12 @@ export interface ScenarioWorldTruth {
   meetingTranscripts: MeetingTranscript[];
   crmActivities: CrmActivity[];
   knowledgeObjects: KnowledgeObject[];
+  // Operations Foundation (Reference World v2, Schritt 2): scenario-abhängig, weil
+  // direkt aus den scenario-abhängigen gewonnenen Opportunities abgeleitet (Sales →
+  // Operations Kausalkette, freigegebene Domain Decision 9) — dieselbe Einordnung wie
+  // accountOwnerships/leads/opportunities oben, nicht wie die scenario-unabhängigen
+  // Employees.
+  deliveryUnits: DeliveryUnit[];
   observations: Observation[];
   groundTruth: GroundTruthSnapshot;
 }
@@ -77,6 +84,9 @@ const SEED_STEP = {
   salesPipeline: 4,
   interactions: 5,
   knowledgeObjects: 6,
+  // Operations Foundation (Reference World v2, Schritt 2): additiver neuer Schritt,
+  // bestehende Offsets 3-6 unverändert.
+  deliveryUnits: 7,
 } as const;
 
 export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfile = BASELINE_PROFILE): ScenarioWorld {
@@ -123,6 +133,18 @@ export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfil
     stageHistory,
   );
 
+  // Operations Foundation (Reference World v2, Schritt 2): abgeleitet ausschließlich
+  // aus den bereits generierten, scenario-abhängigen Opportunities — Sales →
+  // Operations Kausalkette (freigegebene Domain Decision 9). Jede DeliveryUnit ist
+  // über opportunityId auf eine real existierende, tatsächlich gewonnene Opportunity
+  // zurückführbar (siehe world/delivery-units.ts).
+  const deliveryUnits = generateDeliveryUnits(
+    worldSeed + SEED_STEP.deliveryUnits + offset,
+    opportunities,
+    EMPLOYEES,
+    profile.operations,
+  );
+
   // --- Events → Observations → Ground Truth (Prinzip 7/17) ----------------------
   // Observations sind ein reiner Analyse-Schritt ohne eigenen Zufallsstrom (keine
   // Rule Engine) — derselbe, unveränderte Code läuft gegen die tatsächlich erzeugte
@@ -153,6 +175,7 @@ export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfil
     meetingTranscripts,
     crmActivities,
     knowledgeObjects,
+    deliveryUnits,
     observations,
     groundTruth,
   };

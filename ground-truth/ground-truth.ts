@@ -128,6 +128,15 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // Ground-Truth-Auswertung (siehe PEOPLE_GROUND_TRUTH_SNAPSHOTS), nicht über diese.
   "people-critical-role-unstaffed": "primaer",
   "people-critical-role-last-person": "sekundaer",
+
+  // Operations-Domäne: additiv, vom Compiler erzwungen (s. o.). "unterstuetzend" —
+  // nicht weil der Fund unwichtig wäre, sondern weil ohne Severity-Bewertung (Domain
+  // Decision 5) keine Grundlage besteht, ihn als primär/sekundär für die aktuelle
+  // Gesamtlage einzustufen. Eine höhere Priorität wäre eine implizite Bewertung durch
+  // die Hintertür — genau das, was die Operations-Domain-Decisions ausschließen.
+  // Läuft über eine eigene, separate Ground-Truth-Auswertung (s. u.), wirkt sich
+  // nicht auf GROUND_TRUTH_SNAPSHOTS/PEOPLE_GROUND_TRUTH_SNAPSHOTS aus.
+  "operations-delivery-fair-share": "unterstuetzend",
 };
 
 // Rein redaktionelle Zuordnung bereits bestehender Observation-Kinds zu thematisch
@@ -164,9 +173,29 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // "Team-Kontinuität" — keine der bestehenden Sales-Gruppen passt inhaltlich.
   "people-critical-role-unstaffed": "Team-Kontinuität",
   "people-critical-role-last-person": "Team-Kontinuität",
+
+  // Operations-Domäne: additiv, vom Compiler erzwungen (s. o.). Eigene, neue Gruppe
+  // "Delivery" (freigegebene Vorgabe, Phase 10).
+  "operations-delivery-fair-share": "Delivery",
 };
 
-function buildObservationGroups(observations: readonly Observation[]): ObservationGroup[] {
+// Operations Foundation (Reference World v2, Schritt 2, Phase 9/10): der gesamte
+// Ground-Truth-Generator liest von jeder Observation ausschließlich id und kind —
+// nie severity/confidence/category/statement/derivedFrom/generatedAt. Der
+// Parametertyp wird deshalb auf genau diese beiden Felder verengt statt auf das
+// volle Observation-Interface zu bestehen. Das ist eine reine Verallgemeinerung:
+// Observation erfüllt ObservationLike weiterhin vollständig (strukturelle
+// Typisierung), keine Verhaltensänderung für die bestehenden Sales-/People-Aufrufe.
+// Ermöglicht damit einer bewusst severity-freien Struktur wie OperationsObservation
+// (observations/operations-observations.ts — Operations liefert laut freigegebener
+// Domain Decision ausdrücklich KEINE Severity-Bewertung), denselben, unveränderten
+// Generator zu nutzen, ohne Observation.severity global optional zu machen (das
+// hätte die für alle Sales-Observations geltende Invariante
+// checkObservationFieldsValid/OBSERVATION_SEVERITIES in validation/invariants.ts
+// unnötig aufgeweicht) und ohne eine neue Parallelarchitektur zu bauen.
+export type ObservationLike = Pick<Observation, "id" | "kind">;
+
+function buildObservationGroups(observations: readonly ObservationLike[]): ObservationGroup[] {
   const observationIdsByLabel = new Map<string, string[]>();
   for (const observation of observations) {
     const label = OBSERVATION_GROUP_LABELS[observation.kind];
@@ -194,14 +223,14 @@ function hashString(s: string): number {
   }
   return h;
 }
-function snapshotId(observations: readonly Observation[], timestamp: string): string {
+function snapshotId(observations: readonly ObservationLike[], timestamp: string): string {
   const fingerprint = `${timestamp}|${observations.map((o) => o.id).join(",")}`;
   return `gts-${String(hashString(fingerprint) % 100000).padStart(5, "0")}`;
 }
 
 // Ein Snapshot beschreibt die Ground Truth zu genau einem Zeitpunkt: alle zu diesem
 // Zeitpunkt gültigen Observations, ihre Priorität und ihre thematische Gruppierung.
-export function generateGroundTruthSnapshot(observations: readonly Observation[], timestamp: string): GroundTruthSnapshot {
+export function generateGroundTruthSnapshot(observations: readonly ObservationLike[], timestamp: string): GroundTruthSnapshot {
   return {
     id: snapshotId(observations, timestamp),
     timestamp,
