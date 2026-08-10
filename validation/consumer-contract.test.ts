@@ -15,6 +15,10 @@ import {
   type CompanyBusinessStateSnapshot,
   type CompanyExecutiveContextSnapshot,
   type CompanyCrossAreaLink,
+  type CompanyExecutiveKpiData,
+  type PeopleHireFact,
+  type PeopleTerminationFact,
+  type SalesWonDealFact,
   type WorldSnapshot,
   type ScenarioProfile,
   BASELINE_PROFILE,
@@ -36,8 +40,25 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
       worldSnapshot: WorldSnapshot;
       scenarioProfile: ScenarioProfile;
       fullContext: FullCompanyContext;
+      executiveKpiData: CompanyExecutiveKpiData;
+      hireFact: PeopleHireFact;
+      terminationFact: PeopleTerminationFact;
+      wonDealFact: SalesWonDealFact;
     } | undefined = undefined;
     expect(_typeCheck).toBeUndefined();
+  });
+
+  it("Executive KPI Contract v1.1: executiveKpis ist ausschließlich über generateFullCompanyContext() erreichbar, ohne jeden internen Modulpfad", () => {
+    const context = generateFullCompanyContext();
+    expect(context.executiveKpis).toBeDefined();
+    expect(context.executiveKpis.asOf).toBe(WORLD_NOW);
+    expect(typeof context.executiveKpis.people.activeHeadcount).toBe("number");
+    expect(Array.isArray(context.executiveKpis.people.hires)).toBe(true);
+    expect(Array.isArray(context.executiveKpis.people.terminations)).toBe(true);
+    expect(Array.isArray(context.executiveKpis.sales.wonDeals)).toBe(true);
+    // Bestehende Felder bleiben unverändert erreichbar — rein additive Erweiterung.
+    expect(context.businessState).toBeDefined();
+    expect(context.executiveContext).toBeDefined();
   });
 
   it("generateFullCompanyContext ist importierbar und ohne Argumente aufrufbar (volle Default-Baseline)", () => {

@@ -29,6 +29,19 @@ export type { CompanyBusinessStateType, CompanyBusinessStateSnapshot } from "./c
 
 export type { CompanyExecutiveContextSnapshot, CompanyCrossAreaLink } from "./company/company-executive-context";
 
+// Executive KPI Contract v1.1 Foundation: rein deskriptive Rohfakten
+// (People-Headcount/Eintritte/Austritte, Sales Won Deals), additiv an
+// FullCompanyContext.executiveKpis angehängt. Der erzeugende Generator
+// (generateCompanyExecutiveKpiData) bleibt bewusst intern — Consumer erhalten
+// diese Daten ausschließlich über generateFullCompanyContext().executiveKpis,
+// wie jede andere Teilstruktur von FullCompanyContext auch.
+export type {
+  CompanyExecutiveKpiData,
+  PeopleHireFact,
+  PeopleTerminationFact,
+  SalesWonDealFact,
+} from "./company/company-executive-kpis";
+
 export type { WorldSnapshot } from "./snapshot/snapshot";
 
 export type { ScenarioProfile } from "./engine/scenario-profiles";

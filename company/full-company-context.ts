@@ -12,6 +12,8 @@ import { WORLD_NOW } from "../timeline/world-clock";
 import { generateCompanyContextFromSnapshot } from "./company-context";
 import type { CompanyBusinessStateSnapshot } from "./company-business-state";
 import type { CompanyExecutiveContextSnapshot } from "./company-executive-context";
+import { generateCompanyExecutiveKpiData } from "./company-executive-kpis";
+import type { CompanyExecutiveKpiData } from "./company-executive-kpis";
 
 // Public Consumer Contract (sales-platform Integration Decision, Step A, Phase 3):
 // dünne Orchestrierungsfunktion — sie enthält KEINE eigene Klassifikationslogik,
@@ -35,6 +37,12 @@ import type { CompanyExecutiveContextSnapshot } from "./company-executive-contex
 export interface FullCompanyContext {
   businessState: CompanyBusinessStateSnapshot;
   executiveContext: CompanyExecutiveContextSnapshot;
+  // Additive, backward-compatible Erweiterung (Executive KPI Contract v1.1
+  // Foundation): rein deskriptive Rohfakten aus demselben, bereits oben
+  // berechneten WorldSnapshot — keine neue Bewertung, kein neuer Business
+  // State, keine Kopplung an businessState/executiveContext über den
+  // gemeinsamen asOf-Zeitpunkt hinaus.
+  executiveKpis: CompanyExecutiveKpiData;
 }
 
 export function generateFullCompanyContext(
@@ -67,11 +75,18 @@ export function generateFullCompanyContext(
   const salesBusinessState = generateBusinessStateSnapshot(scenarioWorld.groundTruth, scenarioWorld.observations);
   const salesExecutiveContext = generateExecutiveContextSnapshot(salesBusinessState, scenarioWorld.groundTruth);
 
-  return generateCompanyContextFromSnapshot(
+  const companyContext = generateCompanyContextFromSnapshot(
     snapshot,
     salesBusinessState,
     salesExecutiveContext,
     scenarioWorld.groundTruth,
     scenarioWorld.observations,
   );
+
+  // Reine Weiterverwendung des bereits oben berechneten Snapshots — keine
+  // zweite Weltgenerierung, kein zusätzlicher RNG-Aufruf (Executive KPI
+  // Contract v1.1 Foundation, Option A).
+  const executiveKpis = generateCompanyExecutiveKpiData(snapshot);
+
+  return { ...companyContext, executiveKpis };
 }
