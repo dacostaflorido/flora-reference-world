@@ -19,6 +19,9 @@ import {
   type PeopleHireFact,
   type PeopleTerminationFact,
   type SalesWonDealFact,
+  type MarketingExecutiveKpiData,
+  type MarketingLeadFact,
+  type MarketingSalesHandoffFact,
   type WorldSnapshot,
   type ScenarioProfile,
   BASELINE_PROFILE,
@@ -44,6 +47,9 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
       hireFact: PeopleHireFact;
       terminationFact: PeopleTerminationFact;
       wonDealFact: SalesWonDealFact;
+      marketingKpiData: MarketingExecutiveKpiData;
+      marketingLeadFact: MarketingLeadFact;
+      marketingSalesHandoffFact: MarketingSalesHandoffFact;
     } | undefined = undefined;
     expect(_typeCheck).toBeUndefined();
   });
@@ -59,6 +65,13 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
     // Bestehende Felder bleiben unverändert erreichbar — rein additive Erweiterung.
     expect(context.businessState).toBeDefined();
     expect(context.executiveContext).toBeDefined();
+  });
+
+  it("Marketing Executive KPI Contract v1 Foundation: executiveKpis.marketing ist ausschließlich über generateFullCompanyContext() erreichbar, ohne jeden internen Modulpfad", () => {
+    const context = generateFullCompanyContext();
+    expect(context.executiveKpis.marketing).toBeDefined();
+    expect(Array.isArray(context.executiveKpis.marketing.leads)).toBe(true);
+    expect(Array.isArray(context.executiveKpis.marketing.salesHandoffs)).toBe(true);
   });
 
   it("generateFullCompanyContext ist importierbar und ohne Argumente aufrufbar (volle Default-Baseline)", () => {

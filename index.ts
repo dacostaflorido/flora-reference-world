@@ -42,6 +42,13 @@ export type {
   SalesWonDealFact,
 } from "./company/company-executive-kpis";
 
+// Marketing Executive KPI Contract v1 Foundation: additive Rohfakten (Leads,
+// Sales-Handoffs), an CompanyExecutiveKpiData.marketing angehängt. Der
+// erzeugende Generator (generateMarketingExecutiveKpiData) bleibt bewusst
+// intern — Consumer erhalten diese Daten ausschließlich über
+// generateFullCompanyContext().executiveKpis.marketing.
+export type { MarketingExecutiveKpiData, MarketingLeadFact, MarketingSalesHandoffFact } from "./company/marketing-executive-kpis";
+
 export type { WorldSnapshot } from "./snapshot/snapshot";
 
 export type { ScenarioProfile } from "./engine/scenario-profiles";

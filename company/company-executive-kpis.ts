@@ -1,5 +1,6 @@
 import type { WorldSnapshot } from "../snapshot/snapshot";
 import type { Employee } from "../world/employees";
+import { generateMarketingExecutiveKpiData, type MarketingExecutiveKpiData } from "./marketing-executive-kpis";
 
 // Executive KPI Contract v1.1 Foundation — eine rein deskriptive Ergänzung zu
 // FullCompanyContext, die bereits vorhandene, datierte Rohfakten aus dem
@@ -22,12 +23,19 @@ import type { Employee } from "../world/employees";
 // Explizit NICHT Bestandteil (siehe Auftrag "Executive KPI Contract v1.1
 // Foundation"): revenue/umsatz/cashflow/invoice/payment (kein
 // entsprechendes Domänenkonzept existiert irgendwo in dieser Reference
-// World), marketing (keine eigene Company Area), Neukunden
-// (CustomerAccount.createdAt markiert die Account-Anlage im Prospect-Pool,
-// nicht belegbar als "Kunde seit" — siehe Abschlussbericht, Phase 12),
-// Operations (bereits vollständig öffentlich über
-// CompanyAreaSummary.relevantMetrics der "operations"-Area — eine zweite
-// Kopie derselben fünf Werte hier wäre reine Duplikation ohne neuen Fakt).
+// World), Neukunden (CustomerAccount.createdAt markiert die Account-Anlage
+// im Prospect-Pool, nicht belegbar als "Kunde seit" — siehe
+// Abschlussbericht, Phase 12), Operations (bereits vollständig öffentlich
+// über CompanyAreaSummary.relevantMetrics der "operations"-Area — eine
+// zweite Kopie derselben fünf Werte hier wäre reine Duplikation ohne neuen
+// Fakt).
+//
+// Marketing (Marketing Foundation, additiv): seit diesem Schritt Teil dieses
+// Contracts als eigener `marketing`-Zweig (siehe marketing-executive-kpis.ts
+// für Facts/Rationale) — bleibt aber weiterhin KEINE eigene Company Area
+// (company-area.ts, CompanyAreaKey unverändert). Nur Leads und Sales-Handoffs
+// sind evidenzbasiert belegbar; Qualified Leads und CAC/Spend sind
+// ausdrücklich NICHT implementiert (siehe dortige Begründung).
 export interface PeopleHireFact {
   employeeId: string;
   hiredAt: string;
@@ -55,6 +63,7 @@ export interface CompanyExecutiveKpiData {
   sales: {
     wonDeals: SalesWonDealFact[];
   };
+  marketing: MarketingExecutiveKpiData;
 }
 
 // Bereits an mehreren Stellen im Repository identisch dupliziert (siehe
@@ -99,9 +108,15 @@ export function generateCompanyExecutiveKpiData(snapshot: WorldSnapshot): Compan
     )
     .sort((a, b) => a.closedAt.localeCompare(b.closedAt) || a.opportunityId.localeCompare(b.opportunityId));
 
+  // Reine Weiterverwendung desselben Snapshots — keine zweite Weltgenerierung,
+  // kein zusätzlicher RNG-Aufruf (Marketing Foundation, wie bereits bei
+  // people/sales oben).
+  const marketing = generateMarketingExecutiveKpiData(snapshot);
+
   return {
     asOf: snapshot.asOf,
     people: { activeHeadcount, hires, terminations },
     sales: { wonDeals },
+    marketing,
   };
 }

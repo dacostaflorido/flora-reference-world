@@ -350,13 +350,19 @@ describe("Determinismus & Sortierung (Phase 18/19/28)", () => {
   });
 });
 
+// "marketing" bewusst NICHT mehr in dieser Liste (Marketing Foundation): der
+// oberste Feldname `kpis.marketing` ist seit diesem Schritt eine beabsichtigte,
+// evidenzbasierte Contract-Erweiterung, kein Zeichen erfundener Fachlogik —
+// die eigentlich schützenswerten Begriffe (CAC/Spend/Attribution/Score/...)
+// bleiben unten weiterhin verboten und werden zusätzlich in
+// marketing-executive-kpi-invariants.test.ts spezifisch gegen die
+// marketing-Facts selbst geprüft.
 const FORBIDDEN_RUNTIME_TERMS: RegExp[] = [
   /revenue/i,
   /umsatz/i,
   /cashflow/i,
   /invoice/i,
   /payment/i,
-  /marketing/i,
   /\bcac\b/i,
   /performance/i,
   /\bhealth\b/i,
@@ -375,9 +381,12 @@ describe("Verbotene Begriffe Audit (Phase 32)", () => {
       ...Object.keys(kpis),
       ...Object.keys(kpis.people),
       ...Object.keys(kpis.sales),
+      ...Object.keys(kpis.marketing),
       ...Object.keys(kpis.people.hires[0] ?? {}),
       ...Object.keys(kpis.people.terminations[0] ?? {}),
       ...Object.keys(kpis.sales.wonDeals[0] ?? {}),
+      ...Object.keys(kpis.marketing.leads[0] ?? {}),
+      ...Object.keys(kpis.marketing.salesHandoffs[0] ?? {}),
     ].join(" ");
     for (const pattern of FORBIDDEN_RUNTIME_TERMS) {
       expect(pattern.test(allKeys), `"${allKeys}" matched ${pattern}`).toBe(false);
