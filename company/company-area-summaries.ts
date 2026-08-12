@@ -4,6 +4,7 @@ import type { PeopleBusinessStateSnapshot } from "../business-state/people-busin
 import type { GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import type { Observation } from "../observations/observations";
 import type { OperationsObservation } from "../observations/operations-observations";
+import type { MarketingObservation } from "../observations/marketing-observations";
 import type { CompanyAreaObservationSummary, CompanyAreaSummary } from "./company-area";
 
 // Phase 5 (Company Aggregation Foundation): reine Adapter-Funktionen. Sie lesen
@@ -116,6 +117,44 @@ export function generateOperationsAreaSummary(
     statement: isActive ? observation!.statement : null,
     topObservations,
     relevantMetrics,
+    evidenceIds: isActive ? [...observation!.derivedFrom] : [],
+  };
+}
+
+// MARKETING --------------------------------------------------------------
+// Quellen: Marketing Demand-Generation-Observation, Marketing Ground Truth. state
+// bleibt zwingend null, evaluationStatus zwingend "unzureichende-evidenz" — dieselbe
+// ehrliche Behandlung wie Operations, aus identischer Begründung (Marketing Evidence
+// Audit, siehe observations/marketing-observations.ts: kein im Domainmodell
+// begründbarer Schwellenwert für eine State-Bewertung vorhanden, Evidenzlage sogar
+// strukturell schwächer als bei Operations). statement gibt ausschließlich den
+// bereits vorhandenen Observation-Fakt wieder, unverändert. relevantMetrics bleibt
+// bewusst leer ({}): Lead-/Handoff-Zahlen sind bereits vollständig öffentlich über
+// FullCompanyContext.executiveKpis.marketing (Trennung Company Area = "wie steht
+// Marketing da" vs. Executive KPIs = "welche Fakten sehen wir" — eine zweite Kopie
+// derselben Werte hier wäre reine Duplikation ohne neuen Fakt, exakt dieselbe
+// Begründung wie bei Operations' Ausschluss aus executiveKpis). observation ist
+// optional: undefined nur, wenn zu diesem Zeitpunkt noch keine Leads existieren —
+// dann leere, ehrliche Summary, kein erfundener Ersatzinhalt.
+export function generateMarketingAreaSummary(
+  observation: MarketingObservation | undefined,
+  groundTruth: GroundTruthSnapshot,
+): CompanyAreaSummary {
+  const isActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
+
+  const topObservations: CompanyAreaObservationSummary[] = isActive
+    ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }]
+    : [];
+
+  return {
+    key: "marketing",
+    kind: "department",
+    departmentId: "dept-marketing",
+    state: null,
+    evaluationStatus: "unzureichende-evidenz",
+    statement: isActive ? observation!.statement : null,
+    topObservations,
+    relevantMetrics: {},
     evidenceIds: isActive ? [...observation!.derivedFrom] : [],
   };
 }

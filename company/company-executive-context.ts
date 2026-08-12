@@ -34,31 +34,46 @@ function companyExecutiveContextId(companyBusinessStateId: string, timestamp: st
 }
 
 // Phase 14 — "affected" bedeutet "besitzt aktuell relevante Evidenz", NICHT
-// "ist problematisch". Für Sales/People: ein bewerteter State, der vom neutralen
-// Ausgangszustand "ausgeglichen" abweicht (identischer Wortlaut, identische
-// Bedeutung in beiden Domänen) — "ausgeglichen" selbst zählt bewusst nicht als
-// affected, sonst wäre Sales strukturell immer affected (Sales' eigenes
-// "ausgeglichen" zitiert bereits heute Evidence als Beruhigungsbeleg, siehe
-// business-state.ts). Für Operations: eine aktive Observation existiert
-// (evidenceIds nicht leer) — das ist ausdrücklich erlaubt, obwohl state === null
-// und evaluationStatus === "unzureichende-evidenz" (Phase 14, letzter Absatz).
+// "ist problematisch". Für Areas mit echtem State (Sales/People): ein bewerteter
+// State, der vom neutralen Ausgangszustand "ausgeglichen" abweicht (identischer
+// Wortlaut, identische Bedeutung in beiden Domänen) — "ausgeglichen" selbst zählt
+// bewusst nicht als affected, sonst wäre Sales strukturell immer affected (Sales'
+// eigenes "ausgeglichen" zitiert bereits heute Evidence als Beruhigungsbeleg, siehe
+// business-state.ts). Für Areas ohne State (state === null): eine aktive
+// Observation existiert (evidenceIds nicht leer) — das ist ausdrücklich erlaubt,
+// obwohl evaluationStatus === "unzureichende-evidenz" (Phase 14, letzter Absatz).
+//
+// Marketing as First-Class Company Area: ursprünglich `area.key === "operations"`
+// als Sonderfall geprüft — mit Marketing als zweiter state===null-Area wäre ein
+// weiterer hartkodierter `|| area.key === "marketing"`-Zweig genau die Art
+// Sonderbehandlung, die eine generische Area-Architektur vermeiden soll. Die
+// Bedingung ist stattdessen strukturell auf `area.state === null` umgestellt —
+// verhält sich für Operations identisch (Operations hat state stets null), deckt
+// Marketing korrekt mit ab, und bleibt für jede künftige state-lose Area ohne
+// weitere Änderung gültig.
 function isAreaAffected(area: CompanyAreaSummary): boolean {
-  if (area.key === "operations") {
+  if (area.state === null) {
     return area.evidenceIds.length > 0;
   }
-  return area.state !== null && area.state !== "ausgeglichen";
+  return area.state !== "ausgeglichen";
 }
 
 // Phase 15 — topSituations, maximal 3, deterministische Reihenfolge: bewertete
 // Areas zuerst in fester, bestehender Domänen-Reihenfolge (Sales, People — keine
 // neue Score-Matrix, keine Sales/People-übergreifende Severity-Rangfolge, da Sales
-// keine vergleichbare Area-Severity exponiert), Operations zuletzt. "People:
-// bestehende Severity verwenden, hoch vor mittel" (mehrere People-eigene
-// Observations untereinander) tritt im aktuellen Modell nicht auf (People trägt
-// heute höchstens eine relevante Situation) — keine zusätzliche Sortierlogik nötig,
-// um sie zu erfüllen. Genau 3 Areas existieren heute, jede trägt höchstens ein
-// Statement bei — die Obergrenze wird dadurch strukturell nie überschritten.
-const AREA_PRIORITY_ORDER: readonly CompanyAreaKey[] = ["sales", "people", "operations"];
+// keine vergleichbare Area-Severity exponiert), state-lose Areas danach (Marketing,
+// Operations). "People: bestehende Severity verwenden, hoch vor mittel" (mehrere
+// People-eigene Observations untereinander) tritt im aktuellen Modell nicht auf
+// (People trägt heute höchstens eine relevante Situation) — keine zusätzliche
+// Sortierlogik nötig, um sie zu erfüllen.
+//
+// Marketing as First-Class Company Area: die Reihenfolge folgt dem freigegebenen
+// Zielbild "Sales · Marketing · People · Operations". Mit inzwischen vier Areas
+// (statt vormals drei) kann die Obergrenze von 3 Statements erstmals tatsächlich
+// greifen, falls alle vier gleichzeitig ein Statement beitragen — `slice(0, 3)`
+// unten verhindert das strukturell, ohne eine neue Priorisierungsentscheidung zu
+// treffen.
+const AREA_PRIORITY_ORDER: readonly CompanyAreaKey[] = ["sales", "marketing", "people", "operations"];
 
 function generateTopSituations(areaSummaries: readonly CompanyAreaSummary[]): string[] {
   const situations: string[] = [];

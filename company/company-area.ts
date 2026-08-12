@@ -6,13 +6,21 @@
 // die erst in einer späteren Phase (Company Business State / Executive Context)
 // benötigt und dort bewusst entschieden werden.
 //
-// kind unterscheidet strukturell, NICHT nur benennt: Sales/Operations sind
-// "department" (eigene departmentId in world/departments.ts), People ist
+// kind unterscheidet strukturell, NICHT nur benennt: Sales/Marketing/Operations
+// sind "department" (eigene departmentId in world/departments.ts), People ist
 // "cross-cutting-dimension" (wertet Employee[] unternehmensweit aus, über alle
 // Departments hinweg — es existiert kein "People"-Department im Organigramm). Das
 // Company-Level-Domänenmodell darf diesen Unterschied nicht aus UI-Bequemlichkeit
 // verwischen (People bleibt kein künstliches Department).
-export type CompanyAreaKey = "sales" | "operations" | "people";
+//
+// Marketing (Marketing as First-Class Company Area): additive Erweiterung —
+// Marketing ist strukturell gleichrangig zu Sales/People/Operations, besitzt aber
+// aktuell state=null/evaluationStatus="unzureichende-evidenz" (siehe
+// company-area-summaries.ts, generateMarketingAreaSummary) — dieselbe ehrliche
+// Behandlung wie Operations, nicht weil Marketing weniger wichtig wäre, sondern
+// weil das Domainmodell keine belastbare State-Bewertung hergibt (siehe
+// observations/marketing-observations.ts für die vollständige Begründung).
+export type CompanyAreaKey = "sales" | "marketing" | "people" | "operations";
 
 export type CompanyAreaKind = "department" | "cross-cutting-dimension";
 

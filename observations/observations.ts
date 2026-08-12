@@ -57,7 +57,15 @@ export type ObservationKind =
   // OperationsObservation-Struktur. Der Kind-Wert ist hier trotzdem Teil derselben
   // Union, damit Ground Truth (ground-truth.ts, ObservationLike) denselben
   // generischen Mechanismus (Priorität/Gruppierung nach kind) verwenden kann.
-  | "operations-delivery-fair-share";
+  | "operations-delivery-fair-share"
+  // Marketing-Domäne (Marketing as First-Class Company Area): additiv, keine neue
+  // Taxonomie. Erzeugt ausschließlich in observations/marketing-observations.ts,
+  // aus Lead-/Sales-Handoff-Fakten (dieselbe Quelle wie
+  // company/marketing-executive-kpis.ts) — dieselbe strukturelle Begründung wie bei
+  // Operations: rein deskriptives Volumen, keine im Domainmodell begründbare
+  // Severity-Schwelle vorhanden, daher separate MarketingObservation-Struktur statt
+  // des vollen Observation-Interfaces.
+  | "marketing-demand-generation-volume";
 
 export interface Observation {
   id: string;

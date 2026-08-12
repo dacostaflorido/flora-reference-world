@@ -159,12 +159,15 @@ describe("Marketing Executive KPI Facts — Determinismus & Sortierung", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("16. keine RNG-Sequenzverschiebung: bestehende Sales-/People-/Operations-/Company-Baseline bleibt durch die Marketing-Erweiterung unverändert", () => {
+  it("16. keine RNG-Sequenzverschiebung: bestehende Sales-/People-/Operations-/Company-Baseline bleibt durch die Marketing-KPI-Erweiterung unverändert", () => {
+    // Hinweis: seit "Marketing as First-Class Company Area" enthält
+    // insufficientEvidenceAreas/affectedAreas zusätzlich "marketing" — das ist die
+    // separate, bewusste Area-Erweiterung (siehe company-state-invariants.test.ts),
+    // nicht Teil dieses KPI-Contract-Tests. Hier wird nur geprüft, dass die
+    // KPI-Erweiterung selbst keine RNG-Sequenz verschoben hat.
     const context = generateFullCompanyContext();
     expect(context.businessState.type).toBe("ausgeglichen");
     expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
-    expect(context.executiveContext.affectedAreas).toEqual(["operations"]);
     expect(context.executiveKpis.people.activeHeadcount).toBe(38);
     expect(context.executiveKpis.sales.wonDeals.length).toBeGreaterThan(0);
   });
@@ -230,11 +233,32 @@ describe("Marketing: bewusst NICHT implementierte Facts (Marketing Foundation Au
   });
 });
 
-describe("Marketing: keine Company Area (Architekturentscheidung, Phase 4)", () => {
-  it("24. 'marketing' ist kein gültiger CompanyAreaKey — areaSummaries enthält keinen Marketing-Eintrag", () => {
+// Architekturentscheidung AUFGEHOBEN ("Marketing as First-Class Company Area"):
+// die vorherige Entscheidung "Marketing ist keine Company Area" (Marketing
+// Foundation, Phase 4) galt ausschließlich für den damaligen Evidenzstand. Mit
+// diesem Schritt wird Marketing bewusst zur First-Class Company Area — mit
+// derselben ehrlichen state=null/evaluationStatus="unzureichende-evidenz"-
+// Behandlung wie Operations, nicht mit einer erfundenen Bewertung (siehe
+// company-state-invariants.test.ts für die vollständigen Area-/Aggregations-
+// Invarianten). Der ursprüngliche Test hier prüfte das genaue Gegenteil der
+// jetzt gültigen Architektur und wird durch das untenstehende Gegenstück
+// ersetzt, nicht stillschweigend gelöscht.
+describe("Marketing: First-Class Company Area, aber unzureichende Evidenz (Architekturentscheidung aufgehoben)", () => {
+  it("24. 'marketing' ist ein gültiger CompanyAreaKey — areaSummaries enthält einen Marketing-Eintrag mit state=null/evaluationStatus=unzureichende-evidenz", () => {
     const context = generateFullCompanyContext();
-    const keys = context.executiveContext.areaSummaries.map((a) => a.key);
-    expect(keys).not.toContain("marketing");
-    expect(keys.slice().sort()).toEqual(["operations", "people", "sales"]);
+    const summaries = context.executiveContext.areaSummaries;
+    const keys = summaries.map((a) => a.key);
+    expect(keys).toContain("marketing");
+    expect(keys.slice().sort()).toEqual(["marketing", "operations", "people", "sales"]);
+
+    const marketing = summaries.find((a) => a.key === "marketing")!;
+    expect(marketing.state).toBeNull();
+    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+    expect(marketing.kind).toBe("department");
+    expect(marketing.departmentId).toBe("dept-marketing");
+    // Trennung Company Area vs. Executive KPIs bleibt bestehen: relevantMetrics
+    // dupliziert nicht dieselben Leads-/Handoff-Zahlen, die bereits über
+    // executiveKpis.marketing öffentlich sind.
+    expect(marketing.relevantMetrics).toEqual({});
   });
 });

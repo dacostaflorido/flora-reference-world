@@ -13,9 +13,11 @@ import { CONTACTS } from "../world/contacts";
 import { WORLD_NOW } from "../timeline/world-clock";
 import {
   generateSalesAreaSummary,
+  generateMarketingAreaSummary,
   generatePeopleAreaSummary,
   generateOperationsAreaSummary,
 } from "../company/company-area-summaries";
+import { generateMarketingDemandGenerationObservation } from "../observations/marketing-observations";
 import type { CompanyAreaSummary } from "../company/company-area";
 import { generateCompanyBusinessStateSnapshot } from "../company/company-business-state";
 import { generateCompanyExecutiveContextSnapshot } from "../company/company-executive-context";
@@ -37,7 +39,11 @@ function realAreaSummaries(): CompanyAreaSummary[] {
   const operationsGroundTruth = generateGroundTruthSnapshot(operationsObservation ? [operationsObservation] : [], WORLD_NOW);
   const operationsSummary = generateOperationsAreaSummary(operationsObservation, operationsGroundTruth);
 
-  return [salesSummary, peopleSummary, operationsSummary];
+  const marketingObservation = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW);
+  const marketingGroundTruth = generateGroundTruthSnapshot(marketingObservation ? [marketingObservation] : [], WORLD_NOW);
+  const marketingSummary = generateMarketingAreaSummary(marketingObservation, marketingGroundTruth);
+
+  return [salesSummary, marketingSummary, peopleSummary, operationsSummary];
 }
 
 // Isolierte Fixtures (Phase 18/19) — konstruieren CompanyAreaSummary direkt, ohne
@@ -72,9 +78,9 @@ const FORBIDDEN_NORMATIVE_PATTERNS: RegExp[] = [
 ];
 
 describe("Company Area Summary: Strukturinvarianten", () => {
-  it("1. exakt drei Areas: sales, operations, people", () => {
+  it("1. exakt vier Areas: sales, marketing, operations, people", () => {
     const summaries = realAreaSummaries();
-    expect(summaries.map((s) => s.key).sort()).toEqual(["operations", "people", "sales"]);
+    expect(summaries.map((s) => s.key).sort()).toEqual(["marketing", "operations", "people", "sales"]);
   });
 
   it("2. Sales kind = department", () => {
@@ -83,6 +89,15 @@ describe("Company Area Summary: Strukturinvarianten", () => {
 
   it("3. Operations kind = department", () => {
     expect(realAreaSummaries().find((s) => s.key === "operations")!.kind).toBe("department");
+  });
+
+  it("3b. Marketing kind = department, state = null, evaluationStatus = unzureichende-evidenz (First-Class Company Area, aber dieselbe ehrliche Behandlung wie Operations)", () => {
+    const marketing = realAreaSummaries().find((s) => s.key === "marketing")!;
+    expect(marketing.kind).toBe("department");
+    expect(marketing.departmentId).toBe("dept-marketing");
+    expect(marketing.state).toBeNull();
+    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+    expect(marketing.relevantMetrics).toEqual({});
   });
 
   it("4. People kind = cross-cutting-dimension", () => {
@@ -171,7 +186,7 @@ describe("Company Business State: department-divergenz-Regel (Phase 10/18/19)", 
     const result = generateCompanyBusinessStateSnapshot(summaries, WORLD_NOW);
     expect(result.type).toBe("ausgeglichen");
     expect(result.evaluatedAreas.sort()).toEqual(["people", "sales"]);
-    expect(result.insufficientEvidenceAreas).toEqual(["operations"]);
+    expect(result.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
   });
 });
 
@@ -190,9 +205,9 @@ describe("Company Business State: Strukturinvarianten", () => {
     }
   });
 
-  it("15. insufficientEvidenceAreas korrekt (enthält Operations, solange unbewertet)", () => {
+  it("15. insufficientEvidenceAreas korrekt (enthält Marketing und Operations, solange unbewertet)", () => {
     const result = generateCompanyBusinessStateSnapshot(realAreaSummaries(), WORLD_NOW);
-    expect(result.insufficientEvidenceAreas).toEqual(["operations"]);
+    expect(result.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
   });
 
   it("16. supportingEvidenceIds sind Teilmenge existierender Area-Evidence", () => {
@@ -243,6 +258,14 @@ describe("Company Executive Context: affectedAreas, topSituations, Cross-Area-Li
     const context = generateCompanyExecutiveContextSnapshot(businessState.id, summaries, WORLD_NOW);
     expect(context.affectedAreas).toContain("operations");
     expect(businessState.evaluatedAreas).not.toContain("operations");
+  });
+
+  it("20b. Marketing kann affected sein, ohne bewertet zu sein (dieselbe state===null-Regel wie Operations)", () => {
+    const summaries = realAreaSummaries();
+    const businessState = generateCompanyBusinessStateSnapshot(summaries, WORLD_NOW);
+    const context = generateCompanyExecutiveContextSnapshot(businessState.id, summaries, WORLD_NOW);
+    expect(context.affectedAreas).toContain("marketing");
+    expect(businessState.evaluatedAreas).not.toContain("marketing");
   });
 
   it("21. topSituations.length <= 3", () => {
@@ -367,6 +390,20 @@ describe("Backward Explainability (Phase 20)", () => {
     }
   });
 
+  it("30b. Marketing: Company Summary → Marketing Ground Truth → Marketing Observation → Lead/Opportunity", () => {
+    const marketingObservation = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW)!;
+    const marketingGroundTruth = generateGroundTruthSnapshot([marketingObservation], WORLD_NOW);
+    const summary = generateMarketingAreaSummary(marketingObservation, marketingGroundTruth);
+
+    expect(marketingGroundTruth.activeObservationIds).toContain(marketingObservation.id);
+    expect(summary.evidenceIds.length).toBeGreaterThan(0);
+    for (const id of summary.evidenceIds) {
+      const isLead = world.leads.some((l) => l.id === id);
+      const isOpportunity = world.opportunities.some((o) => o.id === id);
+      expect(isLead || isOpportunity).toBe(true);
+    }
+  });
+
   it("31. Cross-Area: Sales→Operations Link → Operations Observation → DeliveryUnit → Opportunity begründet die Unit tatsächlich", () => {
     const summaries = realAreaSummaries();
     const businessState = generateCompanyBusinessStateSnapshot(summaries, WORLD_NOW);
@@ -418,11 +455,11 @@ describe("Snapshot-Integration (Phase 21): generateCompanyContextFromSnapshot, k
       world.observations,
     );
     expect(businessState.type).toBe("ausgeglichen");
-    expect(businessState.insufficientEvidenceAreas).toEqual(["operations"]);
-    expect(executiveContext.affectedAreas).toEqual(["operations"]);
+    expect(businessState.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
+    expect(executiveContext.affectedAreas).toEqual(["marketing", "operations"]);
   });
 
-  it("33. keine Zukunftskenntnis: Snapshot lange vor jedem Won-Datum liefert Operations ohne aktive Evidenz", () => {
+  it("33. keine Zukunftskenntnis: Snapshot lange vor jedem Won-Datum/jedem Lead liefert Marketing/Operations ohne aktive Evidenz", () => {
     const snapshot = generateWorldSnapshot(toSource(), "2020-01-01");
     const salesBusinessState = generateBusinessStateSnapshot(world.groundTruth, world.observations);
     const salesExecutiveContext = generateExecutiveContextSnapshot(salesBusinessState, world.groundTruth);
@@ -433,8 +470,12 @@ describe("Snapshot-Integration (Phase 21): generateCompanyContextFromSnapshot, k
       world.groundTruth,
       world.observations,
     );
-    expect(businessState.insufficientEvidenceAreas).toEqual(["operations"]);
+    expect(businessState.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
     expect(snapshot.operationsObservation?.activeDeliveryUnitsTotal ?? 0).toBe(0);
+    // 2020-01-01 liegt vor WORLD_TIMELINE_START (2024-06-01) — es existieren noch
+    // keine Leads, marketingObservation ist daher ehrlich undefined statt einer
+    // erfundenen Nullwert-Observation.
+    expect(snapshot.marketingObservation).toBeUndefined();
   });
 
   it("34. keine Zukunftskenntnis: Snapshot vor Merle Winklers terminatedAt kennt dieses Event nicht", () => {
@@ -471,5 +512,12 @@ describe("Regressionsschutz: Sales-/People-/Operations-Eingänge unverändert", 
     const before = JSON.parse(JSON.stringify(world.deliveryUnits));
     realAreaSummaries();
     expect(world.deliveryUnits).toEqual(before);
+  });
+
+  it("39. Marketing-Eingänge (world.leads/world.opportunities) werden durch Area-Summary-Erzeugung nicht verändert", () => {
+    const before = JSON.parse(JSON.stringify({ leads: world.leads, opportunities: world.opportunities }));
+    realAreaSummaries();
+    expect(world.leads).toEqual(before.leads);
+    expect(world.opportunities).toEqual(before.opportunities);
   });
 });

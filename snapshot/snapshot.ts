@@ -2,6 +2,7 @@ import type { Employee } from "../world/employees";
 import type { EmployeeHired, EmployeeTerminated } from "../events/employee-lifecycle";
 import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
 import { generateOperationsDeliveryFairShareObservation, type OperationsObservation } from "../observations/operations-observations";
+import { generateMarketingDemandGenerationObservation, type MarketingObservation } from "../observations/marketing-observations";
 import type { CustomerAccount } from "../world/customer-accounts";
 import type { Contact } from "../world/contacts";
 import type { AccountOwnership } from "../world/account-ownership";
@@ -80,6 +81,10 @@ export interface WorldSnapshot {
   // abgeleitet (Backward Explainability) — undefined nur, wenn zu asOf keine aktiven
   // Operations-Mitarbeiter existieren.
   operationsObservation: OperationsObservation | undefined;
+  // Marketing-Demand-Generation-Fakt zu asOf, ausschließlich aus den bereits
+  // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
+  // undefined nur, wenn zu asOf noch keine Leads existieren.
+  marketingObservation: MarketingObservation | undefined;
   customerAccounts: CustomerAccount[];
   contacts: Contact[];
   accountOwnerships: AccountOwnership[];
@@ -166,6 +171,15 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
       return lead;
     });
 
+  // Marketing as First-Class Company Area: exakt dieselbe Existenz-Filterung wie
+  // operationsObservation oben — einmalig pro Snapshot aus den bereits asOf-
+  // gefilterten leads/opportunities berechnet, keine zweite Filterung.
+  const marketingObservation = generateMarketingDemandGenerationObservation(
+    leads,
+    opportunities.map((entry) => entry.opportunity),
+    asOf,
+  );
+
   const knowledgeObjects = world.knowledgeObjects.filter((k) => k.createdAt <= asOf);
   const calls = world.calls.filter((c) => c.timestamp <= asOf);
   const emails = world.emails.filter((e) => e.timestamp <= asOf);
@@ -182,6 +196,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     deliveryUnits,
     activeDeliveryUnits,
     operationsObservation,
+    marketingObservation,
     customerAccounts,
     contacts,
     accountOwnerships,

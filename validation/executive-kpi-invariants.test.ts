@@ -132,7 +132,7 @@ describe("People Executive KPI Facts (Phase 20)", () => {
   it("11. bestehender FullCompanyContext bleibt unverändert, abgesehen vom additiven executiveKpis-Feld", () => {
     const context = generateFullCompanyContext();
     expect(context.businessState.type).toBe("ausgeglichen");
-    expect(context.executiveContext.affectedAreas).toEqual(["operations"]);
+    expect(context.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
     expect(context.executiveKpis).toBeDefined();
   });
 });
@@ -229,7 +229,7 @@ describe("Sales Executive KPI Facts — Won Deals (Phase 21)", () => {
   it("12. bestehender FullCompanyContext bleibt regressionsfrei", () => {
     const context = generateFullCompanyContext();
     expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
   });
 });
 
@@ -297,8 +297,8 @@ describe("Determinismus & Sortierung (Phase 18/19/28)", () => {
     // Baseline-Werten (siehe company-state-invariants.test.ts/consumer-contract.test.ts).
     expect(withKpis.businessState.type).toBe("ausgeglichen");
     expect(withKpis.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(withKpis.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
-    expect(withKpis.executiveContext.affectedAreas).toEqual(["operations"]);
+    expect(withKpis.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(withKpis.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
   });
 
   it("hires sind chronologisch nach hiredAt sortiert, employeeId als Tie-Breaker", () => {

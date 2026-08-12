@@ -8,6 +8,7 @@ import { generatePeopleBusinessStateSnapshot } from "../business-state/people-bu
 import type { WorldSnapshot } from "../snapshot/snapshot";
 import {
   generateSalesAreaSummary,
+  generateMarketingAreaSummary,
   generatePeopleAreaSummary,
   generateOperationsAreaSummary,
 } from "./company-area-summaries";
@@ -58,8 +59,17 @@ export function generateCompanyContextFromSnapshot(
     snapshot.asOf,
   );
 
+  // Marketing as First-Class Company Area: exakt dieselbe Herleitung wie Operations
+  // oben — snapshot.marketingObservation ist bereits im Snapshot selbst vollständig
+  // vorberechnet (snapshot.ts), keine erneute Ableitung nötig.
+  const marketingGroundTruth = generateGroundTruthSnapshot(
+    snapshot.marketingObservation ? [snapshot.marketingObservation] : [],
+    snapshot.asOf,
+  );
+
   const areaSummaries = [
     generateSalesAreaSummary(salesBusinessState, salesExecutiveContext, salesGroundTruth, salesObservations),
+    generateMarketingAreaSummary(snapshot.marketingObservation, marketingGroundTruth),
     generatePeopleAreaSummary(peopleBusinessState, peopleGroundTruth, peopleObservations),
     generateOperationsAreaSummary(snapshot.operationsObservation, operationsGroundTruth),
   ];

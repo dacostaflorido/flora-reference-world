@@ -51,16 +51,44 @@ function classifyAreaLoad(state: string): AreaLoadClassification | undefined {
 
 // Phase 11 — Statement-Text semantisch geprüft und absichtlich exakt so formuliert:
 // KEINE Aussage über das gesamte Unternehmen, ausschließlich eine Aussage über die
-// bewerteten Areas plus eine explizite Nennung der Evidenzgrenze bei Operations.
-// Das ist keine Operations-Bewertung, sondern eine Aussage über die Grenze
-// vorhandener Evidenz — der Typname "ausgeglichen" bleibt tragfähig, weil die
-// tatsächliche Bedeutung im Statement steht, nicht im Typnamen allein (derselbe
-// bereits etablierte Grundsatz wie bei Sales' eigenem "ausgeglichen": auch dort
-// bedeutet der Name nie "das gesamte Unternehmen ist gesund", sondern "kein
-// dominanter Druck innerhalb der bewerteten Evidenz dieser Domäne").
-const AUSGEGLICHEN_STATEMENT =
-  "Die bewerteten Bereiche zeigen keinen widersprüchlichen Zustand; für Operations liegt noch keine kalibrierte " +
-  "Bewertung vor.";
+// bewerteten Areas plus eine explizite Nennung der Evidenzgrenze bei jeder Area mit
+// "unzureichende-evidenz". Das ist keine Bewertung der genannten Areas, sondern eine
+// Aussage über die Grenze vorhandener Evidenz — der Typname "ausgeglichen" bleibt
+// tragfähig, weil die tatsächliche Bedeutung im Statement steht, nicht im Typnamen
+// allein (derselbe bereits etablierte Grundsatz wie bei Sales' eigenem
+// "ausgeglichen": auch dort bedeutet der Name nie "das gesamte Unternehmen ist
+// gesund", sondern "kein dominanter Druck innerhalb der bewerteten Evidenz dieser
+// Domäne").
+//
+// Marketing as First-Class Company Area: ursprünglich ein statischer String, der
+// ausschließlich Operations nannte. Mit Marketing als zweiter "unzureichende-
+// evidenz"-Area (dieselbe ehrliche Behandlung, siehe company-area-summaries.ts) wäre
+// ein weiterhin statischer, nur um "und Marketing" ergänzter String erneut nicht
+// generisch — bei einer künftigen dritten unbewerteten Area müsste er wieder von
+// Hand angepasst werden. AREA_DISPLAY_NAME + buildAusgeglichenStatement() leiten den
+// Satz stattdessen direkt aus insufficientEvidenceAreas ab: keine neue fachliche
+// Aussage, nur dieselbe bereits bestehende Information generisch statt hartkodiert
+// wiedergegeben.
+const AREA_DISPLAY_NAME: Record<CompanyAreaKey, string> = {
+  sales: "Sales",
+  marketing: "Marketing",
+  people: "People",
+  operations: "Operations",
+};
+
+function formatAreaList(areas: readonly CompanyAreaKey[]): string {
+  const names = areas.map((key) => AREA_DISPLAY_NAME[key]);
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} und ${names[names.length - 1]}`;
+}
+
+function buildAusgeglichenStatement(insufficientEvidenceAreas: readonly CompanyAreaKey[]): string {
+  const base = "Die bewerteten Bereiche zeigen keinen widersprüchlichen Zustand";
+  if (insufficientEvidenceAreas.length === 0) {
+    return `${base}.`;
+  }
+  return `${base}; für ${formatAreaList(insufficientEvidenceAreas)} liegt noch keine kalibrierte Bewertung vor.`;
+}
 
 const DEPARTMENT_DIVERGENZ_STATEMENT =
   "Die bewerteten Bereiche zeigen gleichzeitig einen positiven und einen belasteten Zustand.";
@@ -102,11 +130,13 @@ export function generateCompanyBusinessStateSnapshot(
   const belastet = classified.filter((c) => c.classification === "belastet");
   const isDivergent = positive.length > 0 && belastet.length > 0;
 
-  const type: CompanyBusinessStateType = isDivergent ? "department-divergenz" : "ausgeglichen";
-  const statement = isDivergent ? DEPARTMENT_DIVERGENZ_STATEMENT : AUSGEGLICHEN_STATEMENT;
-
   const evaluatedAreas = evaluated.map((a) => a.key);
   const insufficientEvidenceAreas = insufficientEvidence.map((a) => a.key);
+
+  const type: CompanyBusinessStateType = isDivergent ? "department-divergenz" : "ausgeglichen";
+  const statement = isDivergent
+    ? DEPARTMENT_DIVERGENZ_STATEMENT
+    : buildAusgeglichenStatement(insufficientEvidenceAreas);
 
   // supportingEvidenceIds referenziert ausschließlich bereits vorhandene IDs aus den
   // Area Summaries — bei department-divergenz die Evidence der divergenten Areas

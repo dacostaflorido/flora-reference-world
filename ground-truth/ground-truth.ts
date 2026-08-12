@@ -137,6 +137,14 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // Läuft über eine eigene, separate Ground-Truth-Auswertung (s. u.), wirkt sich
   // nicht auf GROUND_TRUTH_SNAPSHOTS/PEOPLE_GROUND_TRUTH_SNAPSHOTS aus.
   "operations-delivery-fair-share": "unterstuetzend",
+
+  // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom Compiler
+  // erzwungen (s. o.). "unterstuetzend" aus identischer Begründung wie Operations
+  // oben — reines Volumen ohne im Domainmodell begründbare Schwelle, keine
+  // Grundlage für primär/sekundär. Läuft über eine eigene, separate
+  // Ground-Truth-Auswertung (s. u.), wirkt sich nicht auf
+  // GROUND_TRUTH_SNAPSHOTS/PEOPLE_GROUND_TRUTH_SNAPSHOTS aus.
+  "marketing-demand-generation-volume": "unterstuetzend",
 };
 
 // Rein redaktionelle Zuordnung bereits bestehender Observation-Kinds zu thematisch
@@ -177,6 +185,12 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // Operations-Domäne: additiv, vom Compiler erzwungen (s. o.). Eigene, neue Gruppe
   // "Delivery" (freigegebene Vorgabe, Phase 10).
   "operations-delivery-fair-share": "Delivery",
+
+  // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom
+  // Compiler erzwungen (s. o.). Eigene, neue Gruppe "Nachfrage" — keine der
+  // bestehenden Gruppen (Pipeline/Preis/Team/Accounts/Volumen/Team-Kontinuität/
+  // Delivery) passt fachlich zu Lead-Entstehung/Sales-Übergabe.
+  "marketing-demand-generation-volume": "Nachfrage",
 };
 
 // Operations Foundation (Reference World v2, Schritt 2, Phase 9/10): der gesamte

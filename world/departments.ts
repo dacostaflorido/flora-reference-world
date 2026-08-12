@@ -1,4 +1,4 @@
-// Feldebene wie im eingefrorenen Architekturmodell festgelegt. Marketing/Customer
+// Feldebene wie im eingefrorenen Architekturmodell festgelegt. Customer
 // Success/RevOps/Assistenz existieren weiterhin ausschließlich für
 // Organigramm-Realismus (Headcount, Berichtslinien) — die Referenzwelt generiert für
 // sie keine eigenen Event-Typen (siehe PRINCIPLES.md, Prinzip 10 und 11). Operations
@@ -8,6 +8,15 @@
 // (EmployeeHired/EmployeeTerminated, siehe events/employee-lifecycle.ts) für JEDE
 // Abteilung Events — sie sind eine unternehmensweite, abteilungsübergreifende
 // Querschnitts-Domäne, keine weitere Ausnahme für eine einzelne Abteilung hier.
+//
+// Marketing (Marketing as First-Class Company Area): die dept-marketing-
+// Mitarbeitenden selbst bleiben reiner Organigramm-Realismus ohne eigene
+// Event-Typen — keine Kampagnen-, Budget- oder Aktivitäts-Events sind ihnen
+// zugeordnet. Die Marketing Company Area selbst bezieht ihre Evidenz jedoch NICHT
+// von diesen Mitarbeitenden, sondern von bereits bestehenden Lead-/Opportunity-
+// Events aus der Sales-Pipeline (siehe observations/marketing-observations.ts) —
+// dieselbe Unterscheidung wie bei Operations: das Department als Organigramm-Eintrag
+// bleibt unverändert ereignislos, die Company Area darüber ist es nicht.
 export interface Department {
   id: string;
   name: string;

@@ -84,8 +84,8 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
     const context = generateFullCompanyContext();
     expect(context.businessState.type).toBe("ausgeglichen");
     expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
-    expect(context.executiveContext.affectedAreas).toEqual(["operations"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(context.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
   });
 
   it("BASELINE_PROFILE/SCENARIO_PROFILES/WORLD_NOW sind importierbar und nutzbar, um ein Szenario/einen Zeitpunkt zu wählen", () => {
@@ -109,7 +109,7 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
     expect(generateFullCompanyContext()).toEqual(generateFullCompanyContext());
   });
 
-  it("semantische Regression (Integrationsentscheidung, Phase 7): Sales/People/Operations/Company-Baseline unverändert", () => {
+  it("semantische Regression (Integrationsentscheidung, Phase 7): Sales/Marketing/People/Operations/Company-Baseline unverändert", () => {
     const context = generateFullCompanyContext();
     const areas = new Map(context.executiveContext.areaSummaries.map((a) => [a.key, a]));
 
@@ -124,12 +124,17 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
     expect(operations.state).toBeNull();
     expect(operations.evaluationStatus).toBe("unzureichende-evidenz");
 
+    const marketing = areas.get("marketing")!;
+    expect(marketing.state).toBeNull();
+    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+
     expect(context.businessState.type).toBe("ausgeglichen");
     expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
-    expect(context.executiveContext.affectedAreas).toEqual(["operations"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(context.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
 
-    // Operations trägt nie zur Divergenzklassifikation bei.
+    // Operations/Marketing tragen nie zur Divergenzklassifikation bei (state=null).
     expect(context.businessState.evaluatedAreas).not.toContain("operations");
+    expect(context.businessState.evaluatedAreas).not.toContain("marketing");
   });
 });
