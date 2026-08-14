@@ -1,3 +1,5 @@
+import { DEFAULT_MARKETING_DEMAND_MODEL, type MarketingDemandModel } from "./marketing-demand";
+
 // Ein Scenario Profile ist KEINE zweite Welt und KEIN separater Datensatz. Es
 // verschiebt ausschließlich Wahrscheinlichkeiten, Verteilungen, Zeitfenster und
 // Aktivitätsmuster im bestehenden Generator — dieselbe Firma, dieselben Mitarbeiter,
@@ -34,6 +36,13 @@ export interface ScenarioProfile {
   // weiteres, eigenständig benanntes Feld, ohne `sales` anzufassen oder
   // ScenarioProfile grundlegend umzubauen.
   operations: OperationsScenarioConfig;
+
+  // Marketing Demand Model (Marketing Demand Model — World Generation First):
+  // zweites Beispiel desselben Erweiterungspunkts, exakt wie `operations` oben
+  // ohne `sales`/`operations` anzufassen ergänzt. Beschreibt ausschließlich, wie
+  // Marketing-Nachfrage (Lead-Entstehung) über die Zeit verteilt ist — World-
+  // Wahrheit, keine Bewertung (siehe marketing-demand.ts).
+  marketing: MarketingScenarioConfig;
 }
 
 // Analog zu SalesScenarioConfig.overloadedEmployeeIds/overloadWeightMultiplier
@@ -44,6 +53,18 @@ export interface ScenarioProfile {
 // ist die benannte, lesbare Außenschicht darüber ("balanced" = wirkungslos, leere
 // concentratedEmployeeIds/Multiplier 1 — identisch zum bisherigen Verhalten;
 // "concentrated" = dieselbe Gewichtungs-Mechanik, jetzt mit Wirkung).
+// Marketing Demand Model — World Generation First: wrapt ausschließlich das
+// bereits in marketing-demand.ts definierte MarketingDemandModel als
+// eigenständig benanntes Scenario-Config-Feld, exakt demselben
+// Erweiterungsmuster wie OperationsScenarioConfig oben folgend. Marketing-
+// Nachfrage ist bewusst NICHT an ein Sales-Scenario-Narrativ gekoppelt (dieselbe
+// Grenzziehung wie im Marketing Evidence Audit: "Marketing darf nicht Sales mit
+// anderem Namen sein") — alle sechs Profile teilen sich dasselbe reale,
+// saisonal begründete Demand Model (siehe DEFAULT_MARKETING_DEMAND_MODEL).
+export interface MarketingScenarioConfig {
+  demandModel: MarketingDemandModel;
+}
+
 export interface OperationsScenarioConfig {
   assignmentStrategy: "balanced" | "concentrated";
   concentratedEmployeeIds: readonly string[];
@@ -123,6 +144,7 @@ export const BASELINE_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 1,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 export const OPERATIVER_FOKUS_PROFILE: ScenarioProfile = {
@@ -154,6 +176,7 @@ export const OPERATIVER_FOKUS_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 1,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 export const STRATEGISCHER_TAG_PROFILE: ScenarioProfile = {
@@ -181,6 +204,7 @@ export const STRATEGISCHER_TAG_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 1,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 export const WACHSTUMSDRUCK_PROFILE: ScenarioProfile = {
@@ -202,6 +226,7 @@ export const WACHSTUMSDRUCK_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 1,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 // Bewusst konkrete, real existierende Employee-IDs — eine dokumentierte, gezielte
@@ -230,6 +255,7 @@ export const TEAM_ENGPASS_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 4,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 export const PIPELINE_RISIKO_PROFILE: ScenarioProfile = {
@@ -256,6 +282,7 @@ export const PIPELINE_RISIKO_PROFILE: ScenarioProfile = {
     overloadWeightMultiplier: 1,
   },
   operations: { assignmentStrategy: "balanced", concentratedEmployeeIds: [], concentrationWeightMultiplier: 1 },
+  marketing: { demandModel: DEFAULT_MARKETING_DEMAND_MODEL },
 };
 
 export const SCENARIO_PROFILES: readonly ScenarioProfile[] = [

@@ -1,5 +1,6 @@
 import { createRng, WORLD_SEED, type Rng } from "../engine/seed";
 import { addDays, daysBetween, pick, randomInt } from "../engine/random";
+import { sampleDemandDrivenDate } from "../engine/marketing-demand";
 import { WORLD_NOW, WORLD_TIMELINE_START } from "../timeline/world-clock";
 import { BASELINE_PROFILE, type ScenarioProfile } from "../engine/scenario-profiles";
 import { EMPLOYEES, type Employee } from "../world/employees";
@@ -18,6 +19,38 @@ import type { OpportunityStageHistory } from "./opportunity-stage-history";
 // sondern die minimal notwendige Kopplung innerhalb dieser drei Entitäten.
 
 const LEAD_COUNT = 1100;
+
+// Marketing Demand Model — World Generation First: eigener, vom
+// Haupt-Pipeline-Rng vollständig getrennter Zufallsstrom für die
+// Nachfrage-getriebene Bestimmung von Lead.createdAt (siehe
+// engine/marketing-demand.ts). Ein großer, klar von allen bestehenden
+// Seed-Offsets (SEED_STEP in engine/generator.ts: 3-7; SCENARIO_SEED_OFFSETS:
+// 0-500.000) getrennter Offset — verhindert jede Kollision und stellt sicher,
+// dass eine Änderung der Nachfrage-Verteilung die übrigen, fachlich
+// unabhängigen Zufallsentscheidungen je Lead (Quelle, Status,
+// Folgekontakt-Zeitpunkt, Konversions-Offset) nicht verschiebt: `rng` bleibt in
+// exakt derselben Aufrufreihenfolge wie zuvor erhalten, nur die
+// createdAt-Bestimmung wechselt von `rng` zu `demandRng`.
+//
+// AUFTRAG — Sales Ownership / Marketing Demand Decoupling: der Offset wird
+// zusätzlich mit dem Lead-Loop-Index kombiniert (siehe unten, `seed +
+// MARKETING_DEMAND_SEED_OFFSET + i`) — jeder Lead erhält dadurch einen
+// eigenständigen, entity-stabilen demandRng-Teilstrom statt eines gemeinsam
+// sequenziell verbrauchten Stroms. Ursache: `sampleDemandDrivenDate` verbraucht
+// über Rejection Sampling eine VARIABLE Anzahl von rng()-Aufrufen pro Lead — bei
+// einem gemeinsamen Strom verschiebt eine Nachfrage-Änderung für EIN
+// Kalenderfenster dadurch die kumulative Stream-Position für JEDEN nachfolgenden
+// Lead, unabhängig davon, ob dessen eigenes zulässiges Zeitfenster das
+// geänderte Regime überhaupt berührt — ein reines RNG-Sequenz-/Order-Artefakt
+// (Kategorie B/D), keine fachliche Kopplung. Reproduktion und Beleg (93 % auf
+// 1,9 % divergente Leads bei einer isolierten Modelländerung) in
+// validation/sales-ownership-decoupling.test.ts. `i` ist dabei bewusst der
+// Lead-Loop-Index (nicht z. B. account.id+contact.id): er ist für ein gegebenes
+// Scenario-Profil unabhängig vom Demand Model bereits stabil, da Account-/
+// Contact-Picks weiterhin ausschließlich aus dem separaten Haupt-`rng`-Strom
+// kommen (siehe oben) — keine neue Hash-/Seed-Bibliothek nötig, dieselbe
+// additive Seed-Komposition wie überall sonst im Repository.
+const MARKETING_DEMAND_SEED_OFFSET = 10_000_000;
 
 const LEAD_SOURCES = [
   "Webinar", "Kaltakquise", "Empfehlung", "Website-Formular", "Messe",
@@ -106,6 +139,7 @@ export function generateSalesPipeline(
 ): SalesPipeline {
   const rng = createRng(seed);
   const sales = scenarioProfile.sales;
+  const marketingDemandModel = scenarioProfile.marketing.demandModel;
   const leadCount = Math.round(LEAD_COUNT * sales.leadCountMultiplier);
   const { neu, kontaktiert, qualifiziert, konvertiert } = sales.leadStatusThresholds;
   const { open: openThreshold, gewonnen: gewonnenThreshold } = sales.opportunityOutcomeThresholds;
@@ -348,7 +382,10 @@ export function generateSalesPipeline(
       continue;
     }
 
-    const createdAt = addDays(earliestDate, randomInt(rng, 0, daysBetween(earliestDate, WORLD_NOW)));
+    // Entity-stabiler demandRng-Teilstrom je Lead-Index (siehe
+    // MARKETING_DEMAND_SEED_OFFSET oben für die vollständige Begründung).
+    const demandRng = createRng(seed + MARKETING_DEMAND_SEED_OFFSET + i);
+    const createdAt = sampleDemandDrivenDate(demandRng, marketingDemandModel, earliestDate, WORLD_NOW);
     const remainingDays = daysBetween(createdAt, WORLD_NOW);
     const ownerEmployeeId = resolveLeadOwner(account.id, createdAt);
     const source = pick(rng, LEAD_SOURCES);

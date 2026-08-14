@@ -45,8 +45,25 @@ describe("GroundTruthSnapshot", () => {
     // Beweist die Entkopplung an einem konkreten Gegenbeispiel in beide Richtungen,
     // statt nur zu behaupten, dass keine Ableitungsfunktion mehr existiert:
     // obs-00001 hat severity "niedrig", aber Priorität "sekundaer" (höher als die
-    // severity-gespiegelte Zuordnung nahelegen würde); obs-00010 hat severity
-    // "mittel", aber Priorität "unterstuetzend" (niedriger).
+    // severity-gespiegelte Zuordnung nahelegen würde) — weiterhin real in der
+    // generierten Baseline-Welt vorhanden.
+    //
+    // Marketing Demand Model — World Generation First: die "niedriger als
+    // Spiegelung"-Richtung (vorher: obs-00010, severity "mittel", Priorität
+    // "unterstuetzend") trat in der alten Baseline-Welt zufällig auf, ist aber
+    // keine garantierte Eigenschaft eines bestimmten Observation-Slots — GROUND_
+    // TRUTH_PRIORITIES ordnet Prioritäten fest je Observation-`kind` zu (siehe
+    // ground-truth.ts), unabhängig von severity; OB ein konkreter, in der
+    // generierten Welt tatsächlich aktiver Kind mit "unterstuetzend"-Priorität
+    // gerade severity "mittel"/"hoch" trägt, hängt von den zugrunde liegenden
+    // Rohdaten ab — durch den neuen, unabhängigen Lead-Timing-Zufallsstrom
+    // (engine/marketing-demand.ts) verschoben, sodass dieser Fall in der aktuellen
+    // Baseline-Welt gerade nicht mehr auftritt. Die eigentlich geprüfte
+    // Eigenschaft (Priorität ist eine reine Kind→Tier-Tabelle, keine
+    // severity-Ableitung) ist damit unverändert wahr und wird hier robust,
+    // RNG-unabhängig mit einem synthetischen Gegenbeispiel bewiesen:
+    // "ae-workload-distribution" hat Priorität "unterstuetzend" (ground-truth.ts),
+    // unabhängig davon, welche severity die konkrete Observation-Instanz trägt.
     const snapshot = GROUND_TRUTH_SNAPSHOTS[0]!;
     const priorityById = new Map(snapshot.priorities.map((p) => [p.observationId, p.tier]));
     const observationById = new Map(OBSERVATIONS.map((o) => [o.id, o]));
@@ -54,8 +71,23 @@ describe("GroundTruthSnapshot", () => {
     expect(observationById.get("obs-00001")?.severity).toBe("niedrig");
     expect(priorityById.get("obs-00001")).toBe("sekundaer");
 
-    expect(observationById.get("obs-00010")?.severity).toBe("mittel");
-    expect(priorityById.get("obs-00010")).toBe("unterstuetzend");
+    const syntheticObservations = [
+      {
+        id: "obs-synthetic-mittel-unterstuetzend",
+        kind: "ae-workload-distribution" as const,
+        generatedAt: WORLD_NOW,
+        statement: "Testaussage.",
+        category: "team-hinweis" as const,
+        severity: "mittel" as const,
+        confidence: "mittel" as const,
+        derivedFrom: [],
+      },
+    ];
+    const syntheticSnapshot = generateGroundTruthSnapshot(syntheticObservations, WORLD_NOW);
+    const syntheticTier = syntheticSnapshot.priorities.find(
+      (p) => p.observationId === "obs-synthetic-mittel-unterstuetzend",
+    )?.tier;
+    expect(syntheticTier).toBe("unterstuetzend");
 
     // Über den gesamten Snapshot: mindestens eine Observation weicht von der alten,
     // rein severity-gespiegelten Zuordnung ab.

@@ -192,21 +192,36 @@ const FORBIDDEN_WORDS: RegExp[] = [
 describe("Operations Fair-Share-Observation (Phase 7/8): schwellenfrei, rein deskriptiv", () => {
   const observation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW)!;
 
+  // Marketing Demand Model — World Generation First / Sales Ownership Decoupling:
+  // diese Werte änderten sich mehrfach (10/4/4/2 → 17/5/5/7 → 15/5/3/7 →
+  // final 21/11/7/3), weil (a) Lead.createdAt aus einem eigenen, unabhängigen
+  // `demandRng`-Strom kommt statt aus der bisherigen Gleichverteilung über `rng`
+  // und (b) dieser Strom seit dem Decoupling-Auftrag entity-stabil je Lead-Index
+  // statt gemeinsam sequenziell verbraucht wird (siehe
+  // events/generate-sales-pipeline.ts, MARKETING_DEMAND_SEED_OFFSET-Kommentar).
+  // DeliveryUnits sind über Opportunity.closedAt kausal an die Sales-Pipeline
+  // gekoppelt (company-area-summaries.ts: "Sales → Operations Kausalkette") — ein
+  // anderer Zufallsstrom für Lead-Timing verschiebt zwangsläufig, welche
+  // Opportunities wann gewinnen und damit, wie viele DeliveryUnits zum
+  // WORLD_NOW-Stichtag noch im 30-Tage-Onboarding-Fenster aktiv sind. Finaler
+  // Wert nach Umstellung auf die entity-stabile Architektur UND die stärkere,
+  // jetzt Sales-sichere Kalibrierung (elevated=1.2/84d, suppressed=0.6/84d)
+  // gemessen. Sales' eigene Kernklassifikation (businessState.type) bleibt über
+  // alle 6 Scenario-Profile hinweg unverändert — nur dieser nachgelagerte,
+  // zeitfenster-sensible Operations-Fakt verschiebt sich.
   it("Baseline-Fakten bei WORLD_NOW entsprechen den in Phase 7 gemessenen Werten", () => {
     expect(observation).toBeDefined();
-    expect(observation.activeDeliveryUnitsTotal).toBe(10);
+    expect(observation.activeDeliveryUnitsTotal).toBe(21);
     expect(observation.activeUnitsByEmployeeId).toEqual({
-      "emp-henrik-paulsen": 4,
-      "emp-greta-lohmann": 4,
-      "emp-marc-oldenburg": 2,
+      "emp-henrik-paulsen": 11,
+      "emp-greta-lohmann": 7,
+      "emp-marc-oldenburg": 3,
     });
-    expect(observation.fairShare).toBeCloseTo(10 / 3, 10);
-    expect(observation.maxAssignedCount).toBe(4);
-    // Tie-break Henrik/Greta (beide 4): deterministisch die alphabetisch erste
-    // employeeId ("emp-greta-lohmann" < "emp-henrik-paulsen" < "emp-marc-oldenburg").
-    expect(observation.maxAssignedEmployeeId).toBe("emp-greta-lohmann");
-    expect(observation.maxShare).toBeCloseTo(0.4, 10);
-    expect(observation.fairShareRatio).toBeCloseTo(1.2, 10);
+    expect(observation.fairShare).toBeCloseTo(21 / 3, 10);
+    expect(observation.maxAssignedCount).toBe(11);
+    expect(observation.maxAssignedEmployeeId).toBe("emp-henrik-paulsen");
+    expect(observation.maxShare).toBeCloseTo(11 / 21, 10);
+    expect(observation.fairShareRatio).toBeCloseTo(11 / 21 / (1 / 3), 10);
   });
 
   it("derivedFrom referenziert exakt die aktiven DeliveryUnit-IDs, keine anderen", () => {
@@ -319,13 +334,17 @@ describe("ScenarioProfile.operations / Concentrated-Modus (Phase 12/13)", () => 
     const countFor = (units: DeliveryUnit[], employeeId: string) =>
       units.filter((u) => u.assignedEmployeeId === employeeId).length;
 
-    // Tatsächlich gemessene Werte (Phase 13), deterministisch reproduzierbar:
-    // Baseline: Henrik 4, Greta 4, Marc 2 von 10 aktiven Units (maxShare 0.40, fairShareRatio 1.20).
-    // Concentrated: Henrik 5, Greta 4, Marc 1 von 10 aktiven Units (maxShare 0.50, fairShareRatio 1.50).
-    expect(activeBalanced.length).toBe(10);
-    expect(countFor(activeBalanced, "emp-henrik-paulsen")).toBe(4);
-    expect(activeConcentrated.length).toBe(10);
-    expect(countFor(activeConcentrated, "emp-henrik-paulsen")).toBe(5);
+    // Tatsächlich gemessene Werte (Sales Ownership / Marketing Demand
+    // Decoupling, siehe Erklärung bei "Baseline-Fakten bei WORLD_NOW..." oben:
+    // world.opportunities hat sich durch die entity-stabile demandRng-Architektur
+    // UND die stärkere Kalibrierung verschoben, daher auch die absoluten Zahlen
+    // hier):
+    // Balanced: Henrik 11, Greta 7, Marc 3 von 21 aktiven Units.
+    // Concentrated: Henrik 15, Greta 4, Marc 2 von 21 aktiven Units.
+    expect(activeBalanced.length).toBe(21);
+    expect(countFor(activeBalanced, "emp-henrik-paulsen")).toBe(11);
+    expect(activeConcentrated.length).toBe(21);
+    expect(countFor(activeConcentrated, "emp-henrik-paulsen")).toBe(15);
 
     // Die Kernaussage von Phase 13: sichtbar unterschiedlich, keine Aussage darüber,
     // ob/ab wann das "Engpass" bedeutet.
@@ -395,11 +414,13 @@ describe("Snapshot-Integration (Phase 14): DeliveryUnits/Operations Observation,
     expect(snapshot.deliveryUnits.length).toBeLessThan(world.deliveryUnits.length);
   });
 
+  // Marketing Demand Model — World Generation First: siehe Erklärung bei
+  // "Baseline-Fakten bei WORLD_NOW..." weiter oben in dieser Datei.
   it("Snapshot bei WORLD_NOW: identisch zu den bereits in Phase 7 verifizierten Baseline-Fakten", () => {
     const snapshot = generateWorldSnapshot(toSource(), WORLD_NOW);
-    expect(snapshot.activeDeliveryUnits.length).toBe(10);
-    expect(snapshot.operationsObservation!.activeDeliveryUnitsTotal).toBe(10);
-    expect(snapshot.operationsObservation!.maxAssignedCount).toBe(4);
+    expect(snapshot.activeDeliveryUnits.length).toBe(21);
+    expect(snapshot.operationsObservation!.activeDeliveryUnitsTotal).toBe(21);
+    expect(snapshot.operationsObservation!.maxAssignedCount).toBe(11);
   });
 
   it("keine zukünftigen Won-Deals: eine DeliveryUnit deren Opportunity erst nach asOf schließt, erscheint nicht im Snapshot", () => {

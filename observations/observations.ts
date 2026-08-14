@@ -162,7 +162,10 @@ export function generateObservations(
   const stagnationShare = open.length > 0 ? stagnant.length / open.length : 0;
   const stagnationSeverity: Observation["severity"] = stagnationShare > 0.5 ? "hoch" : stagnationShare > 0.15 ? "mittel" : "niedrig";
   const longestStagnant = [...stagnant].sort((a, b) => b.daysInStage - a.daysInStage).slice(0, 8);
-  const stagnationSampleIds = longestStagnant.map((e) => e.opportunity.id);
+  // Auch eine "0 von N stagniert"-Aussage ist eine Tatsachenbehauptung über die
+  // ausgewertete Population und braucht Evidenz — sonst bleibt derivedFrom bei
+  // stagnant.length===0 fälschlich leer (Backward Explainability, Prinzip 18).
+  const stagnationSampleIds = stagnant.length > 0 ? longestStagnant.map((e) => e.opportunity.id) : open.slice(0, 8).map((e) => e.opportunity.id);
   // Cross-Source-Behauptung verifizieren statt annehmen: fehlt bei den am längsten
   // stagnierenden Opportunities auch jede jüngere dokumentierte Aktivität?
   const noRecentActivityCount = longestStagnant.filter((e) => {

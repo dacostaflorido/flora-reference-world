@@ -126,15 +126,26 @@ describe("Business State: Scenario-Blindheit (§1, §9)", () => {
   });
 
   it("strategischer-tag trifft 'strategischer-freiraum' aufgrund echter chance-Evidenz, nicht aufgrund des Profilnamens", () => {
+    // Sales Ownership / Marketing Demand Decoupling: "lead-volume-trend" ist seit
+    // dem stärkeren, jetzt Sales-sicheren Demand Model (siehe
+    // engine/marketing-demand.ts) erstmals selbst ein aktiver "chance"-Beitrag
+    // (vorher strukturell praktisch immer "niedrig"/unauffällig, siehe die
+    // ursprüngliche Begründung in business-state/business-state.ts, warum dieser
+    // Kind bislang unbenutzt blieb) — zusätzlich zu den bereits geprüften Kinds
+    // legitim in der Beweiskette enthalten. Kernaussage bleibt unverändert: die
+    // Klassifikation entsteht aus echten chance-Signalen, nicht aus dem
+    // Profilnamen.
     const world = SCENARIO_WORLDS["strategischer-tag"];
     const businessState = generateBusinessStateSnapshot(world.groundTruth, world.observations);
     expect(businessState.type).toBe("strategischer-freiraum");
     const supportingKinds = businessState.supportingObservationIds.map(
       (id) => world.observations.find((o) => o.id === id)?.kind,
     );
-    expect(supportingKinds.every((k) => k === "chance-account-repeat-business" || k === "touchpoint-richness-won-vs-lost")).toBe(
-      true,
-    );
+    expect(
+      supportingKinds.every(
+        (k) => k === "chance-account-repeat-business" || k === "touchpoint-richness-won-vs-lost" || k === "lead-volume-trend",
+      ),
+    ).toBe(true);
   });
 
   it("team-engpass wird zu 'konzentrierte-last', weil ae-workload-distribution eine echte, hohe Lastkonzentration belegt — nicht weil das Profil so heißt", () => {
@@ -149,12 +160,21 @@ describe("Business State: Scenario-Blindheit (§1, §9)", () => {
     expect(aeWorkload?.severity).toBe("hoch");
   });
 
-  it("wachstumsdruck wird weiterhin NICHT automatisch zu 'wachstum-ueber-kapazitaet' — dieser Type bleibt mit der aktuellen Ground Truth unbelegt (lead-volume-trend misst Trend, nicht Niveau)", () => {
+  it("wachstumsdruck wird weiterhin NICHT automatisch zu 'wachstum-ueber-kapazitaet' — dieser Type bleibt mit der aktuellen Ground Truth unbelegt (lead-volume-trend fließt weiterhin nicht in business-state.ts ein)", () => {
+    // Sales Ownership / Marketing Demand Decoupling: seit dem stärkeren Demand
+    // Model (engine/marketing-demand.ts) zeigt lead-volume-trend jetzt auch für
+    // wachstumsdruck ein echtes, hohes Wachstumssignal (severity="hoch", +63 %) —
+    // die ursprüngliche Prämisse "immer niedrig" ist damit überholt. Die
+    // eigentlich relevante Invariante bleibt aber bestehen: business-state.ts
+    // liest lead-volume-trend nach wie vor NICHT (siehe dortige Begründung,
+    // "Beschleunigung statt Niveau") — "wachstum-ueber-kapazitaet" bleibt daher
+    // weiterhin unerreichbar, unabhängig von diesem Kind.
     const world = SCENARIO_WORLDS.wachstumsdruck;
     const businessState = generateBusinessStateSnapshot(world.groundTruth, world.observations);
     expect(businessState.type).not.toBe("wachstum-ueber-kapazitaet");
     const volumeTrend = world.observations.find((o) => o.kind === "lead-volume-trend");
-    expect(volumeTrend?.severity).toBe("niedrig");
+    expect(volumeTrend?.severity).toBe("hoch");
+    expect(volumeTrend?.category).toBe("chance");
   });
 
   it("baseline wird nicht blind auf 'ausgeglichen' gesetzt, sondern über echte Prüfung der Stagnations- und Chance-Signale erreicht", () => {

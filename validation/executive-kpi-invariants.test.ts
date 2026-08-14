@@ -262,17 +262,29 @@ describe("New Customer Semantik (Phase 22): bewusst nicht implementiert", () => 
 });
 
 describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () => {
+  // Marketing Demand Model — World Generation First / Sales Ownership
+  // Decoupling: activeDeliveryUnits/maxAssignedCount/fairShare/maxShare/
+  // fairShareRatio änderten sich mehrfach (10→15→final 21 usw.), weil (a)
+  // Lead.createdAt aus einem eigenen, unabhängigen `demandRng`-Strom kommt und
+  // (b) dieser seit dem Decoupling-Auftrag entity-stabil je Lead-Index statt
+  // gemeinsam sequenziell verbraucht wird (siehe
+  // validation/operations-invariants.test.ts, "Baseline-Fakten bei WORLD_NOW..."
+  // für die vollständige Begründung der Kausalkette Sales-Lead-Timing →
+  // Won-Opportunities → Operations-Aktivfenster). Werte final nach Umstellung auf
+  // die entity-stabile Architektur UND die stärkere, jetzt Sales-sichere
+  // Kalibrierung (elevated=1.2/84d, suppressed=0.6/84d) gemessen — siehe
+  // engine/marketing-demand.ts.
   it("executiveKpis enthält kein operations-Feld — bereits vollständig über CompanyAreaSummary.relevantMetrics öffentlich", () => {
     const context = generateFullCompanyContext();
     expect(context.executiveKpis).not.toHaveProperty("operations");
 
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
-      activeDeliveryUnits: 10,
-      maxAssignedCount: 4,
-      fairShare: 10 / 3,
-      maxShare: 0.4,
-      fairShareRatio: 1.2,
+      activeDeliveryUnits: 21,
+      maxAssignedCount: 11,
+      fairShare: 7,
+      maxShare: 11 / 21,
+      fairShareRatio: 1.5714285714285714,
     });
   });
 

@@ -134,11 +134,44 @@ describe("Executive Context: Scenario-Blindheit", () => {
     expect(executiveContext.relevanceStatement).toBe(baselineExecutiveContext.relevanceStatement);
   });
 
-  it("pipeline-risiko (operative-anspannung) erhält ein tensionStatement, weil die Evidenz zwei Dimensionen gleichzeitig belegt", () => {
-    const world = SCENARIO_WORLDS["pipeline-risiko"];
-    const businessState = generateBusinessStateSnapshot(world.groundTruth, world.observations);
-    const executiveContext = generateExecutiveContextSnapshot(businessState, world.groundTruth);
-    expect(businessState.type).toBe("operative-anspannung");
+  // Marketing Demand Model — World Generation First: pipeline-risiko belegte vor
+  // dieser Änderung zufällig zwei Dimensionen gleichzeitig (Pipeline + Team) —
+  // eine Koinzidenz des alten Lead-Timing-Zufallsstroms, keine garantierte
+  // Domain-Eigenschaft dieses Profils. Mit dem neuen, unabhängigen
+  // `demandRng`-Strom (siehe engine/marketing-demand.ts) belegt dieses Profil nur
+  // noch die Pipeline-Dimension — Sales' Kernklassifikation (businessState.type
+  // === "operative-anspannung") bleibt dabei unverändert (siehe
+  // validation/operations-invariants.test.ts für die vollständige Kausalkette-
+  // Begründung). Damit exerciert derzeit KEIN generiertes Scenario-Profil mehr
+  // den Zwei-Dimensionen-Pfad zufällig — dieselbe, bereits reine
+  // generateExecutiveContextSnapshot-Logik wird deshalb hier direkt mit
+  // synthetischen Daten geprüft (identisches Fixture-Muster wie im
+  // nachfolgenden describe-Block "keine positionsbasierte
+  // Observation-ID-Semantik"), statt von einer zufälligen Koinzidenz in einer
+  // generierten Welt abzuhängen — robuster und unabhängig vom RNG-Stream.
+  it("zwei gleichzeitig betroffene Dimensionen erzeugen ein tensionStatement (synthetisch, RNG-unabhängig)", () => {
+    const groundTruth: GroundTruthSnapshot = {
+      id: "gts-tension-test",
+      timestamp: WORLD_NOW,
+      activeObservationIds: ["obs-00001", "obs-00002"],
+      priorities: [
+        { observationId: "obs-00001", tier: "unterstuetzend" },
+        { observationId: "obs-00002", tier: "unterstuetzend" },
+      ],
+      observationGroups: [
+        { id: "group-0", label: "Pipeline", observationIds: ["obs-00001"] },
+        { id: "group-1", label: "Team", observationIds: ["obs-00002"] },
+      ],
+    };
+    const businessState: BusinessStateSnapshot = {
+      id: "bstate-tension-test",
+      timestamp: WORLD_NOW,
+      groundTruthSnapshotId: "gts-tension-test",
+      type: "operative-anspannung",
+      statement: "Testaussage.",
+      supportingObservationIds: ["obs-00001", "obs-00002"],
+    };
+    const executiveContext = generateExecutiveContextSnapshot(businessState, groundTruth);
     expect(executiveContext.affectedDimensions).toEqual(["Pipeline", "Team"]);
     expect(executiveContext.tensionStatement).toBeDefined();
   });

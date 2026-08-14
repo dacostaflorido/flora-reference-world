@@ -10,6 +10,7 @@ import { EMPLOYEE_HIRED_EVENTS, EMPLOYEE_TERMINATED_EVENTS } from "../events/emp
 import { CUSTOMER_ACCOUNTS } from "../world/customer-accounts";
 import { CONTACTS } from "../world/contacts";
 import { WORLD_NOW, WORLD_TIMELINE_START } from "../timeline/world-clock";
+import { addDays } from "../engine/random";
 
 // "Marketing as First-Class Company Area" — Invarianten für die neue
 // Observation-/Area-Ebene (company-state-invariants.test.ts deckt bereits die
@@ -62,8 +63,23 @@ describe("Marketing Area — asOf / Future Knowledge", () => {
     }
   });
 
+  // Marketing Demand Model — World Generation First: die frühere Fassung dieses
+  // Tests prüfte exakt asOf=WORLD_TIMELINE_START. WORLD_TIMELINE_START ist eine
+  // INKLUSIVE untere Grenze (Lead.earliestDate = maxIso(WORLD_TIMELINE_START, ...)
+  // kann WORLD_TIMELINE_START selbst annehmen) — ein Lead mit createdAt exakt an
+  // diesem Tag ist strukturell immer schon möglich gewesen, auch im alten
+  // gleichverteilten Modell (nur zufällig nie gezogen). Mit dem neuen, von einem
+  // unabhängigen `demandRng`-Strom gespeisten Sampling (siehe
+  // engine/marketing-demand.ts) trat dieser strukturell immer schon mögliche Fall
+  // erstmals ein (lead-00212). Das ist kein Bug und keine Future-Knowledge-
+  // Verletzung — der Test prüfte einen Zufalls-Zufallstreffer des alten Seeds,
+  // nicht eine echte Domain-Invariante. Die tatsächlich gemeinte Aussage ("vor
+  // jeder Marketing-Aktivität existiert keine Evidenz") wird mit
+  // WORLD_TIMELINE_START-1-Tag robust und beweisbar korrekt geprüft: kein Lead
+  // kann jemals createdAt < WORLD_TIMELINE_START besitzen.
   it("2. vor WORLD_TIMELINE_START existieren keine Leads — Marketing bleibt ehrlich ohne aktive Evidenz, kein erfundener Nullwert", () => {
-    const summary = marketingSummary(WORLD_TIMELINE_START);
+    const dayBeforeTimelineStart = addDays(WORLD_TIMELINE_START, -1);
+    const summary = marketingSummary(dayBeforeTimelineStart);
     expect(summary.evidenceIds).toEqual([]);
     expect(summary.topObservations).toEqual([]);
     expect(summary.statement).toBeNull();
