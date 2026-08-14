@@ -66,6 +66,18 @@ export interface OperationsObservation {
 // Zeitpunkt asOf aktiven DeliveryUnit-IDs (Backward Explainability, Prinzip 18) —
 // über DeliveryUnit.opportunityId/accountId von dort aus vollständig bis zu
 // Opportunity/OpportunityStageHistory/closedAt zurückverfolgbar.
+//
+// Zero-Active-Explainability-Fix (Operations Evidence Audit, Phase C, bestätigt an
+// realen Baseline-Tagen 2025-03-29 bis 2025-04-01): "0 aktive DeliveryUnits" ist
+// zweideutig, solange derivedFrom in jedem Fall [] ist — Prinzip 8 (Evidence
+// Required) verlangt eine unterscheidbare Referenz zwischen "es existiert noch
+// keine geprüfte Population" (vor der ersten DeliveryUnit) und "eine Population
+// wurde geprüft, keine Einheit war aktiv" (bereits gestartete, inzwischen
+// abgeschlossene Einheiten). derivedFrom referenziert deshalb bei 0 aktiven
+// Einheiten ersatzweise die bereits gestartete Population (startDate <= asOf,
+// dieselbe Zukunftswissen-Grenze wie activeDeliveryUnitsAt) — bei aktiven Einheiten
+// bleibt das bisherige, bereits getestete Verhalten (exakt die aktiven IDs)
+// unverändert.
 export function generateOperationsDeliveryFairShareObservation(
   deliveryUnits: readonly DeliveryUnit[],
   employees: readonly Employee[],
@@ -129,7 +141,10 @@ export function generateOperationsDeliveryFairShareObservation(
     maxAssignedEmployeeId,
     maxShare,
     fairShareRatio,
-    derivedFrom: active.map((u) => u.id),
+    derivedFrom:
+      active.length > 0
+        ? active.map((u) => u.id)
+        : deliveryUnits.filter((u) => u.startDate <= asOf).map((u) => u.id),
   };
 }
 

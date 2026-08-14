@@ -252,6 +252,130 @@ describe("Operations Fair-Share-Observation (Phase 7/8): schwellenfrei, rein des
   });
 });
 
+describe("Zero-Active-Explainability-Fix (Operations Evidence Audit, Phase C)", () => {
+  // Synthetische Fixtures, unabhängig von der realen Baseline-Welt — decken exakt
+  // die drei fachlich unterschiedlichen Fälle ab (A3): keine Population, geprüfte
+  // Population ohne aktive Einheit, aktive Einheiten.
+  const completed1: DeliveryUnit = {
+    id: "test-du-completed-1",
+    opportunityId: "test-opp-1",
+    accountId: "test-account-1",
+    assignedEmployeeId: "emp-henrik-paulsen",
+    startDate: "2025-01-01",
+    plannedEndDate: "2025-01-31",
+    actualEndDate: "2025-01-31",
+    status: "abgeschlossen",
+  };
+  const completed2: DeliveryUnit = {
+    ...completed1,
+    id: "test-du-completed-2",
+    opportunityId: "test-opp-2",
+    accountId: "test-account-2",
+    assignedEmployeeId: "emp-greta-lohmann",
+  };
+  const futureUnit: DeliveryUnit = {
+    ...completed1,
+    id: "test-du-future",
+    opportunityId: "test-opp-future",
+    accountId: "test-account-future",
+    startDate: "2099-01-01",
+    plannedEndDate: "2099-01-31",
+    actualEndDate: undefined,
+    status: "laufend",
+  };
+  const runningUnit: DeliveryUnit = {
+    ...completed1,
+    id: "test-du-running",
+    opportunityId: "test-opp-running",
+    accountId: "test-account-running",
+    actualEndDate: undefined,
+    status: "laufend",
+  };
+
+  it("1. vor der ersten DeliveryUnit: derivedFrom=[] bleibt korrekt (keine geprüfte Population)", () => {
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, "2024-01-01")!;
+    expect(obs.activeDeliveryUnitsTotal).toBe(0);
+    expect(obs.derivedFrom).toEqual([]);
+  });
+
+  it("2. bereits gestartete und abgeschlossene Units, keine aktiv: derivedFrom referenziert die geprüfte Population, nicht leer", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf)!;
+    expect(obs.activeDeliveryUnitsTotal).toBe(0);
+    expect(obs.derivedFrom.slice().sort()).toEqual(["test-du-completed-1", "test-du-completed-2"]);
+    expect(obs.derivedFrom.length).toBeGreaterThan(0);
+  });
+
+  it("2b. derivedFrom enthält bei 0 aktiven Units ausschließlich Units mit startDate <= asOf, keine anderen", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2, futureUnit], EMPLOYEES, asOf)!;
+    expect(obs.derivedFrom).not.toContain("test-du-future");
+    expect(obs.derivedFrom.slice().sort()).toEqual(["test-du-completed-1", "test-du-completed-2"]);
+  });
+
+  it("3. aktive Units vorhanden: bestehendes Verhalten unverändert — derivedFrom exakt die aktiven IDs, nicht die gesamte gestartete Population", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2, runningUnit], EMPLOYEES, asOf)!;
+    expect(obs.activeDeliveryUnitsTotal).toBe(1);
+    expect(obs.derivedFrom).toEqual(["test-du-running"]);
+  });
+
+  it("4. Future Knowledge: eine DeliveryUnit mit startDate > asOf erscheint niemals in derivedFrom, auch nicht im Zero-Active-Fall", () => {
+    const asOf = "2024-06-01";
+    const obs = generateOperationsDeliveryFairShareObservation([futureUnit], EMPLOYEES, asOf)!;
+    expect(obs.activeDeliveryUnitsTotal).toBe(0);
+    expect(obs.derivedFrom).toEqual([]);
+  });
+
+  it("5. Determinismus: identischer Input und asOf erzeugen identische Observation", () => {
+    const asOf = "2025-02-15";
+    const runA = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf);
+    const runB = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf);
+    expect(runA).toEqual(runB);
+  });
+
+  it("6. reale Baseline-Tage (29.03.-01.04.2025): geprüfte, nicht-leere Population statt leerem derivedFrom", () => {
+    const startedByThen = new Set(world.deliveryUnits.filter((u) => u.startDate <= "2025-03-29").map((u) => u.id));
+    for (const asOf of ["2025-03-29", "2025-03-30", "2025-03-31", "2025-04-01"]) {
+      const obs = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, asOf)!;
+      expect(obs.activeDeliveryUnitsTotal, asOf).toBe(0);
+      expect(obs.derivedFrom.length, asOf).toBeGreaterThan(0);
+      expect(obs.derivedFrom.length, asOf).toBe(startedByThen.size);
+      for (const id of obs.derivedFrom) {
+        expect(startedByThen.has(id), `${asOf}: ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("7./8. keine leeren oder unbekannten IDs in derivedFrom (Zero-Active-Fall)", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf)!;
+    const knownIds = new Set(["test-du-completed-1", "test-du-completed-2"]);
+    for (const id of obs.derivedFrom) {
+      expect(id.length).toBeGreaterThan(0);
+      expect(knownIds.has(id)).toBe(true);
+    }
+  });
+
+  it("9. keine duplizierten IDs in derivedFrom (Zero-Active-Fall)", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf)!;
+    expect(new Set(obs.derivedFrom).size).toBe(obs.derivedFrom.length);
+  });
+
+  it("10. statement und numerische Metriken bleiben im Zero-Active-Fall unverändert konsistent (nur derivedFrom betroffen)", () => {
+    const asOf = "2025-02-15";
+    const obs = generateOperationsDeliveryFairShareObservation([completed1, completed2], EMPLOYEES, asOf)!;
+    expect(obs.statement).toBe(`Zum ${asOf} sind keine DeliveryUnits aktiv.`);
+    expect(obs.activeDeliveryUnitsTotal).toBe(0);
+    expect(obs.fairShare).toBe(0);
+    expect(obs.maxAssignedCount).toBe(0);
+    expect(obs.maxShare).toBe(0);
+    expect(obs.fairShareRatio).toBe(0);
+    expect(obs.confidence).toBe("unzureichend");
+  });
+});
+
 describe("Operations Ground Truth (Phase 10): generischer Generator wiederverwendet, eigene Gruppe 'Delivery'", () => {
   const observation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW)!;
   const operationsObservations: ObservationLike[] = [observation];
