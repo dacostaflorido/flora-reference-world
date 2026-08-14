@@ -237,20 +237,22 @@ describe("Sales Ownership Decoupling — People/Operations/Company Regression (P
   });
 
   it("Company evaluatedAreas/insufficientEvidenceAreas/affectedAreas bleiben korrekt", () => {
+    // Seit Marketing Leadership State ist Marketing bei WORLD_NOW bewertet (genug
+    // historische Evidenz) — siehe business-state/marketing-business-state.ts.
     const context = generateFullCompanyContext();
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
     expect(context.executiveContext.affectedAreas).toEqual(["marketing", "operations"]);
   });
 });
 
-describe("Sales Ownership Decoupling — Marketing bleibt unzureichende-evidenz (harte Stop-Regel)", () => {
-  it("Marketing state bleibt null, evaluationStatus bleibt unzureichende-evidenz", () => {
+describe("Sales Ownership Decoupling — Marketing bei WORLD_NOW bewertet (Marketing Leadership State, Folgeauftrag)", () => {
+  it("Marketing state ist einer der drei definierten Werte, evaluationStatus ist 'bewertet'", () => {
     const context = generateFullCompanyContext();
     const marketing = context.executiveContext.areaSummaries.find((a) => a.key === "marketing")!;
-    expect(marketing.state).toBeNull();
-    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
-    expect(marketing.relevantMetrics).toEqual({});
+    expect(["stabile-nachfrage", "erhoehte-nachfrage", "unterdrueckte-nachfrage"]).toContain(marketing.state);
+    expect(marketing.evaluationStatus).toBe("bewertet");
+    expect(marketing.relevantMetrics).not.toEqual({});
   });
 
   it("Public Marketing KPI Contract (MarketingLeadFact/MarketingSalesHandoffFact) unverändert", () => {

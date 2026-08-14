@@ -1,10 +1,11 @@
 import type { BusinessStateSnapshot } from "../business-state/business-state";
 import type { ExecutiveContextSnapshot } from "../executive-context/executive-context";
 import type { PeopleBusinessStateSnapshot } from "../business-state/people-business-state";
+import type { MarketingBusinessStateSnapshot } from "../business-state/marketing-business-state";
 import type { GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import type { Observation } from "../observations/observations";
 import type { OperationsObservation } from "../observations/operations-observations";
-import type { MarketingObservation } from "../observations/marketing-observations";
+import type { MarketingObservation, MarketingDemandSignalObservation } from "../observations/marketing-observations";
 import type { CompanyAreaObservationSummary, CompanyAreaSummary } from "./company-area";
 
 // Phase 5 (Company Aggregation Foundation): reine Adapter-Funktionen. Sie lesen
@@ -122,39 +123,61 @@ export function generateOperationsAreaSummary(
 }
 
 // MARKETING --------------------------------------------------------------
-// Quellen: Marketing Demand-Generation-Observation, Marketing Ground Truth. state
-// bleibt zwingend null, evaluationStatus zwingend "unzureichende-evidenz" — dieselbe
-// ehrliche Behandlung wie Operations, aus identischer Begründung (Marketing Evidence
-// Audit, siehe observations/marketing-observations.ts: kein im Domainmodell
-// begründbarer Schwellenwert für eine State-Bewertung vorhanden, Evidenzlage sogar
-// strukturell schwächer als bei Operations). statement gibt ausschließlich den
-// bereits vorhandenen Observation-Fakt wieder, unverändert. relevantMetrics bleibt
-// bewusst leer ({}): Lead-/Handoff-Zahlen sind bereits vollständig öffentlich über
-// FullCompanyContext.executiveKpis.marketing (Trennung Company Area = "wie steht
-// Marketing da" vs. Executive KPIs = "welche Fakten sehen wir" — eine zweite Kopie
-// derselben Werte hier wäre reine Duplikation ohne neuen Fakt, exakt dieselbe
-// Begründung wie bei Operations' Ausschluss aus executiveKpis). observation ist
-// optional: undefined nur, wenn zu diesem Zeitpunkt noch keine Leads existieren —
-// dann leere, ehrliche Summary, kein erfundener Ersatzinhalt.
+// Quellen: Marketing Demand-Generation-Observation (reine Momentaufnahme, weiterhin
+// ohne State-Beitrag — siehe observations/marketing-observations.ts), Marketing
+// Demand-Regime-Signal-Observation (Marketing Leadership State, siehe
+// business-state/marketing-business-state.ts) und Marketing Ground Truth.
+//
+// state/evaluationStatus sind jetzt state-fähig, exakt demselben Muster wie People
+// folgend: state=null/evaluationStatus="unzureichende-evidenz" NUR, solange keine
+// Regime-Signal-Observation aktiv ist (zu wenig historische Evidenz für eine
+// belastbare Referenzdichte, siehe generateMarketingDemandRegimeSignalObservation)
+// — sobald genug Evidenz vorliegt, wird Marketing bewertet: state=businessState.type,
+// evaluationStatus="bewertet". Die drei erreichbaren Types (stabile-nachfrage/
+// erhoehte-nachfrage/unterdrueckte-nachfrage) tragen bewusst keine Bewertungssprache
+// und sind bewusst NICHT in POSITIVE_STATES/BELASTET_STATES (company-business-state.ts)
+// eingetragen — Marketing trägt dadurch nicht zur Company-weiten Divergenzprüfung
+// bei, ohne implizit zu behaupten, mehr/weniger Nachfrage sei per se gut oder
+// belastend (siehe marketing-business-state.ts für die vollständige Begründung).
+//
+// relevantMetrics bleibt für die reine Momentaufnahme-Observation weiterhin leer
+// (Lead-/Handoff-Zahlen bleiben vollständig öffentlich über
+// FullCompanyContext.executiveKpis.marketing) — sobald ein Regime-Signal aktiv ist,
+// werden dessen abgeleitete Vergleichszahlen (nicht Rohzahlen) hier zusätzlich
+// exponiert, exakt demselben Muster wie Operations' fairShare-Kennzahlen folgend.
 export function generateMarketingAreaSummary(
   observation: MarketingObservation | undefined,
+  demandSignal: MarketingDemandSignalObservation | undefined,
+  businessState: MarketingBusinessStateSnapshot | undefined,
   groundTruth: GroundTruthSnapshot,
 ): CompanyAreaSummary {
-  const isActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
+  const isVolumeActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
+  const isSignalActive = demandSignal !== undefined && groundTruth.activeObservationIds.includes(demandSignal.id);
+  const isEvaluated = businessState !== undefined && isSignalActive;
 
-  const topObservations: CompanyAreaObservationSummary[] = isActive
-    ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }]
-    : [];
+  const topObservations: CompanyAreaObservationSummary[] = [
+    ...(isVolumeActive ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }] : []),
+    ...(isSignalActive ? [{ id: demandSignal!.id, statement: demandSignal!.statement, confidence: demandSignal!.confidence }] : []),
+  ];
+
+  const relevantMetrics: Record<string, number | string> = isEvaluated
+    ? {
+        recentWindowDensity1: demandSignal!.recentWindowDensities[0],
+        recentWindowDensity2: demandSignal!.recentWindowDensities[1],
+        referenceDensity: demandSignal!.referenceDensity,
+        regimeSignal: demandSignal!.regimeSignal,
+      }
+    : {};
 
   return {
     key: "marketing",
     kind: "department",
     departmentId: "dept-marketing",
-    state: null,
-    evaluationStatus: "unzureichende-evidenz",
-    statement: isActive ? observation!.statement : null,
+    state: isEvaluated ? businessState!.type : null,
+    evaluationStatus: isEvaluated ? "bewertet" : "unzureichende-evidenz",
+    statement: isEvaluated ? businessState!.statement : isVolumeActive ? observation!.statement : null,
     topObservations,
-    relevantMetrics: {},
-    evidenceIds: isActive ? [...observation!.derivedFrom] : [],
+    relevantMetrics,
+    evidenceIds: isEvaluated ? [...businessState!.supportingObservationIds] : isVolumeActive ? [...observation!.derivedFrom] : [],
   };
 }

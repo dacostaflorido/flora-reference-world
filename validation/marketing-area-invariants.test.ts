@@ -87,11 +87,23 @@ describe("Marketing Area — asOf / Future Knowledge", () => {
     expect(summary.evaluationStatus).toBe("unzureichende-evidenz");
   });
 
-  it("3. historisches asOf enthält strikt weniger Marketing-Evidenz als WORLD_NOW", () => {
-    const early = marketingSummary("2024-09-01");
-    const baseline = marketingSummary(WORLD_NOW);
-    expect(early.evidenceIds.length).toBeGreaterThan(0);
-    expect(early.evidenceIds.length).toBeLessThan(baseline.evidenceIds.length);
+  it("3. historisches asOf kennt strikt weniger Leads als WORLD_NOW", () => {
+    // Marketing Leadership State: evidenceIds.length ist seit der Einführung des
+    // Business State kein verlässlicher Wachstumsindikator mehr — sobald genug
+    // Evidenz für eine Bewertung vorliegt, referenziert evidenceIds nur noch die
+    // (wenigen) tragenden Observation-IDs statt aller Lead-/Opportunity-IDs
+    // (dieselbe Granularität wie bei Sales/People, siehe company-area-summaries.ts).
+    // Die eigentlich gemeinte Aussage ("spätere Zeitpunkte kennen mehr Leads")
+    // wird direkt über die Momentaufnahme-Observation geprüft, die diese
+    // Granularitätsumstellung nicht betrifft.
+    const early = generateMarketingDemandGenerationObservation(
+      world.leads.filter((l) => l.createdAt <= "2024-09-01"),
+      world.opportunities.filter((o) => o.createdAt <= "2024-09-01"),
+      "2024-09-01",
+    )!;
+    const baseline = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW)!;
+    expect(early.leadsTotal).toBeGreaterThan(0);
+    expect(early.leadsTotal).toBeLessThan(baseline.leadsTotal);
   });
 
   it("4. keine Future Knowledge über den WorldSnapshot: marketingObservation referenziert nur zu asOf bereits existierende Leads/Opportunities", () => {
@@ -119,8 +131,8 @@ describe("Marketing Area — Determinismus", () => {
   it("6. gleiche Inputs → identische Marketing Area Summary", () => {
     const observation = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot(observation ? [observation] : [], WORLD_NOW);
-    const a = generateMarketingAreaSummary(observation, groundTruth);
-    const b = generateMarketingAreaSummary(observation, groundTruth);
+    const a = generateMarketingAreaSummary(observation, undefined, undefined, groundTruth);
+    const b = generateMarketingAreaSummary(observation, undefined, undefined, groundTruth);
     expect(a).toEqual(b);
   });
 
@@ -133,16 +145,44 @@ describe("Marketing Area — Determinismus", () => {
   });
 });
 
-describe("Marketing Area — keine erfundene Bewertung (Negativ-Contract, Phase 19)", () => {
-  it("8. state ist bei jedem getesteten asOf ausschließlich null, niemals ein erfundener Wert", () => {
-    for (const asOf of [WORLD_TIMELINE_START, "2024-09-01", "2025-01-01", WORLD_NOW]) {
-      expect(marketingSummary(asOf).state).toBeNull();
+describe("Marketing Area — keine erfundene Bewertung (Negativ-Contract, Phase 19 → Marketing Leadership State, Phase B)", () => {
+  // AKTUALISIERT (Marketing Leadership State): der ursprüngliche Negativ-Contract
+  // ("state/evaluationStatus bleiben für IMMER null/unzureichende-evidenz")
+  // wurde mit ausdrücklicher Freigabe aufgehoben — siehe Abschlussbericht "Sales
+  // Ownership / Marketing Demand Decoupling" ("Domain-Readiness für Marketing
+  // Leadership State: ... Ein State-Auftrag bleibt ein separater, eigener
+  // nächster Schritt") und den vorliegenden Auftrag "Checkpoint Commit/Push +
+  // Marketing Leadership State". Der eigentlich gemeinte, weiterhin gültige
+  // Negativ-Contract ist enger: solange NICHT genug historische Evidenz für eine
+  // belastbare Referenzdichte vorliegt, bleibt Marketing ehrlich unzureichende-
+  // evidenz — kein erfundener State vor diesem Punkt. Sobald genug Evidenz
+  // vorliegt, ist ein State aus der explizit definierten, bewertungsfreien
+  // Taxonomie (siehe business-state/marketing-business-state.ts) zulässig.
+  const MARKETING_STATE_VALUES = new Set(["stabile-nachfrage", "erhoehte-nachfrage", "unterdrueckte-nachfrage"]);
+
+  it("8. state bleibt null, solange nicht genug historische Evidenz vorliegt (vor 2024-10-25)", () => {
+    for (const asOf of [WORLD_TIMELINE_START, "2024-09-01", "2024-10-01"]) {
+      expect(marketingSummary(asOf).state, asOf).toBeNull();
     }
   });
 
-  it("9. evaluationStatus ist bei jedem getesteten asOf ausschließlich 'unzureichende-evidenz'", () => {
+  it("8b. sobald genug historische Evidenz vorliegt, ist state ausschließlich einer der drei definierten, bewertungsfreien Werte — nie ein erfundener String", () => {
+    for (const asOf of ["2025-01-01", WORLD_NOW]) {
+      const state = marketingSummary(asOf).state;
+      expect(state, asOf).not.toBeNull();
+      expect(MARKETING_STATE_VALUES.has(state!), `${asOf}: unerwarteter state "${state}"`).toBe(true);
+    }
+  });
+
+  it("9. evaluationStatus bleibt 'unzureichende-evidenz', solange nicht genug historische Evidenz vorliegt (vor 2024-10-25)", () => {
+    for (const asOf of [WORLD_TIMELINE_START, "2024-09-01", "2024-10-01"]) {
+      expect(marketingSummary(asOf).evaluationStatus, asOf).toBe("unzureichende-evidenz");
+    }
+  });
+
+  it("9b. evaluationStatus ist ausschließlich 'bewertet' oder 'unzureichende-evidenz' — nie ein dritter Wert", () => {
     for (const asOf of [WORLD_TIMELINE_START, "2024-09-01", "2025-01-01", WORLD_NOW]) {
-      expect(marketingSummary(asOf).evaluationStatus).toBe("unzureichende-evidenz");
+      expect(["bewertet", "unzureichende-evidenz"]).toContain(marketingSummary(asOf).evaluationStatus);
     }
   });
 
@@ -174,9 +214,20 @@ describe("Marketing Area — keine erfundene Bewertung (Negativ-Contract, Phase 
     }
   });
 
-  it("16. relevantMetrics bleibt leer — keine Duplikation der bereits über executiveKpis.marketing öffentlichen Leads-/Handoff-Zahlen", () => {
-    const summary = marketingSummary(WORLD_NOW);
+  it("16. relevantMetrics bleibt leer, solange Marketing unzureichende-evidenz ist — keine Duplikation der bereits über executiveKpis.marketing öffentlichen Leads-/Handoff-Zahlen", () => {
+    const summary = marketingSummary("2024-09-01");
+    expect(summary.evaluationStatus).toBe("unzureichende-evidenz");
     expect(summary.relevantMetrics).toEqual({});
+  });
+
+  it("16b. relevantMetrics enthält bei einer Bewertung ausschließlich die abgeleiteten Vergleichszahlen des Regime-Signals — weiterhin keine Duplikation der Rohzahlen aus executiveKpis.marketing", () => {
+    const summary = marketingSummary(WORLD_NOW);
+    expect(summary.evaluationStatus).toBe("bewertet");
+    expect(Object.keys(summary.relevantMetrics).sort()).toEqual(
+      ["recentWindowDensity1", "recentWindowDensity2", "referenceDensity", "regimeSignal"].sort(),
+    );
+    expect(summary.relevantMetrics).not.toHaveProperty("leadsTotal");
+    expect(summary.relevantMetrics).not.toHaveProperty("salesHandoffsTotal");
   });
 });
 

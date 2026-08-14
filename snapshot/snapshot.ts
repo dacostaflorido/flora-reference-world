@@ -2,7 +2,13 @@ import type { Employee } from "../world/employees";
 import type { EmployeeHired, EmployeeTerminated } from "../events/employee-lifecycle";
 import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
 import { generateOperationsDeliveryFairShareObservation, type OperationsObservation } from "../observations/operations-observations";
-import { generateMarketingDemandGenerationObservation, type MarketingObservation } from "../observations/marketing-observations";
+import {
+  generateMarketingDemandGenerationObservation,
+  generateMarketingDemandRegimeSignalObservation,
+  type MarketingObservation,
+  type MarketingDemandSignalObservation,
+} from "../observations/marketing-observations";
+import { WORLD_TIMELINE_START } from "../timeline/world-clock";
 import type { CustomerAccount } from "../world/customer-accounts";
 import type { Contact } from "../world/contacts";
 import type { AccountOwnership } from "../world/account-ownership";
@@ -85,6 +91,11 @@ export interface WorldSnapshot {
   // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine Leads existieren.
   marketingObservation: MarketingObservation | undefined;
+  // Marketing Leadership State: Demand-Regime-Signal zu asOf, ausschließlich aus
+  // den bereits asOf-gefilterten leads abgeleitet — undefined, solange nicht
+  // genug historische Evidenz für eine belastbare Referenzdichte vorliegt (siehe
+  // observations/marketing-observations.ts).
+  marketingDemandSignal: MarketingDemandSignalObservation | undefined;
   customerAccounts: CustomerAccount[];
   contacts: Contact[];
   accountOwnerships: AccountOwnership[];
@@ -179,6 +190,11 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     opportunities.map((entry) => entry.opportunity),
     asOf,
   );
+  // Marketing Leadership State: dieselbe Existenz-/Zeitfilterung, ausschließlich
+  // aus den bereits asOf-gefilterten leads berechnet (siehe
+  // observations/marketing-observations.ts für die vollständige Methodik-
+  // Begründung).
+  const marketingDemandSignal = generateMarketingDemandRegimeSignalObservation(leads, asOf, WORLD_TIMELINE_START);
 
   const knowledgeObjects = world.knowledgeObjects.filter((k) => k.createdAt <= asOf);
   const calls = world.calls.filter((c) => c.timestamp <= asOf);
@@ -197,6 +213,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     activeDeliveryUnits,
     operationsObservation,
     marketingObservation,
+    marketingDemandSignal,
     customerAccounts,
     contacts,
     accountOwnerships,

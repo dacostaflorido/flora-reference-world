@@ -81,10 +81,12 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
   });
 
   it("Baseline Full Company Context erzeugbar und inhaltlich korrekt", () => {
+    // Seit Marketing Leadership State ist Marketing bei WORLD_NOW bewertet (genug
+    // historische Evidenz) — siehe business-state/marketing-business-state.ts.
     const context = generateFullCompanyContext();
     expect(context.businessState.type).toBe("ausgeglichen");
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["operations"]);
     expect(context.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
   });
 
@@ -125,16 +127,24 @@ describe("Public Consumer Contract (Step A, Phase 6): Konsum ausschließlich üb
     expect(operations.evaluationStatus).toBe("unzureichende-evidenz");
 
     const marketing = areas.get("marketing")!;
-    expect(marketing.state).toBeNull();
-    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+    expect(["stabile-nachfrage", "erhoehte-nachfrage", "unterdrueckte-nachfrage"]).toContain(marketing.state);
+    expect(marketing.evaluationStatus).toBe("bewertet");
 
     expect(context.businessState.type).toBe("ausgeglichen");
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["operations"]);
     expect(context.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
 
-    // Operations/Marketing tragen nie zur Divergenzklassifikation bei (state=null).
+    // Operations bleibt strukturell dauerhaft state=null und trägt deshalb nie
+    // zur Divergenzklassifikation bei. Marketing ist seit Marketing Leadership
+    // State bei WORLD_NOW state-fähig und damit korrekt Teil von evaluatedAreas
+    // — trägt aber TROTZDEM bewusst nie zur Divergenzklassifikation bei, weil
+    // seine State-Werte gezielt nicht in company-business-state.ts'
+    // POSITIVE_STATES/BELASTET_STATES eingetragen sind (siehe
+    // business-state/marketing-business-state.ts) — geprüft über company.type,
+    // der ausschließlich von Sales/People abhängt, nicht über evaluatedAreas.
     expect(context.businessState.evaluatedAreas).not.toContain("operations");
-    expect(context.businessState.evaluatedAreas).not.toContain("marketing");
+    expect(context.businessState.evaluatedAreas).toContain("marketing");
+    expect(context.businessState.type).toBe("ausgeglichen");
   });
 });

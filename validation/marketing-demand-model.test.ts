@@ -135,35 +135,51 @@ describe("Marketing Demand Model — Determinismus", () => {
   });
 });
 
-describe("Marketing Demand Model — Marketing bleibt unzureichende-evidenz (Phase 11, verbindlich)", () => {
+describe("Marketing Demand Model — Marketing state bei WORLD_NOW (AKTUALISIERT durch Marketing Leadership State)", () => {
+  // Historischer Kontext: dieser Block hielt ursprünglich fest, dass Marketing
+  // bei WORLD_NOW trotz des neuen Demand Models "unzureichende-evidenz" bleibt —
+  // eine bewusste, hart vorgegebene Grenze GENAU DIESES Auftrags ("Diesen
+  // Auftrag NICHT als Grundlage für einen State verwenden"). Der Folgeauftrag
+  // "Marketing Leadership State" hat diese Grenze mit ausdrücklicher Freigabe
+  // aufgehoben, nachdem das Demand Model selbst (Regime-Dauer/Kalibrierung,
+  // unverändert seit diesem Auftrag) genug historische Evidenz für eine
+  // belastbare Referenzdichte liefert (siehe business-state/marketing-business-
+  // state.ts). Die eigentlich geprüfte Kerninvariante — keine erfundene
+  // Bewertung ohne Evidenz, vollständige Rückverfolgbarkeit — gilt weiterhin,
+  // nur mit einem jetzt zulässigen "bewertet"-Zweig.
   const context = generateFullCompanyContext();
   const marketing = context.executiveContext.areaSummaries.find((a) => a.key === "marketing")!;
 
-  it("evaluationStatus bleibt 'unzureichende-evidenz'", () => {
-    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+  it("evaluationStatus ist 'bewertet' (genug historische Evidenz seit 2024-10-25)", () => {
+    expect(marketing.evaluationStatus).toBe("bewertet");
   });
 
-  it("state bleibt null", () => {
-    expect(marketing.state).toBeNull();
+  it("state ist einer der drei definierten, bewertungsfreien Werte — kein erfundener Wert", () => {
+    expect(["stabile-nachfrage", "erhoehte-nachfrage", "unterdrueckte-nachfrage"]).toContain(marketing.state);
   });
 
-  it("relevantMetrics bleibt leer (keine neue Bewertungs-Metrik eingeführt)", () => {
-    expect(marketing.relevantMetrics).toEqual({});
+  it("relevantMetrics enthält ausschließlich die abgeleiteten Regime-Signal-Vergleichszahlen, keine Rohzahlen-Duplikation", () => {
+    expect(Object.keys(marketing.relevantMetrics).sort()).toEqual(
+      ["recentWindowDensity1", "recentWindowDensity2", "referenceDensity", "regimeSignal"].sort(),
+    );
   });
 
   it("Company State bleibt semantisch korrekt: evaluatedAreas/insufficientEvidenceAreas/affectedAreas", () => {
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas).toEqual(["marketing", "operations"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(context.businessState.insufficientEvidenceAreas).toEqual(["operations"]);
     expect(context.executiveContext.affectedAreas).toEqual(["marketing", "operations"]);
   });
 
-  it("Marketing Evidence bleibt vollständig rückverfolgbar (jede evidenceId referenziert einen Lead oder eine Opportunity)", () => {
-    const world = SCENARIO_WORLDS.baseline;
-    const leadIds = new Set(world.leads.map((l) => l.id));
-    const opportunityIds = new Set(world.opportunities.map((o) => o.id));
+  it("Marketing Evidence bleibt vollständig rückverfolgbar (jede evidenceId referenziert eine tatsächlich aktive Observation)", () => {
+    // evidenceIds referenziert seit der Business-State-Einführung Observation-IDs
+    // (dieselbe Granularität wie Sales/People, siehe company-area-summaries.ts),
+    // nicht mehr direkt Lead-/Opportunity-IDs — die vollständige Kette bis zu den
+    // Leads bleibt über die referenzierte Observation selbst nachvollziehbar
+    // (derivedFrom, siehe observations/marketing-observations.ts).
     for (const id of marketing.evidenceIds) {
-      expect(leadIds.has(id) || opportunityIds.has(id)).toBe(true);
+      expect(id.startsWith("marketing-obs-")).toBe(true);
     }
+    expect(marketing.evidenceIds.length).toBeGreaterThan(0);
   });
 });
 

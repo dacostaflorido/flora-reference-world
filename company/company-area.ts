@@ -13,13 +13,15 @@
 // Company-Level-Domänenmodell darf diesen Unterschied nicht aus UI-Bequemlichkeit
 // verwischen (People bleibt kein künstliches Department).
 //
-// Marketing (Marketing as First-Class Company Area): additive Erweiterung —
-// Marketing ist strukturell gleichrangig zu Sales/People/Operations, besitzt aber
-// aktuell state=null/evaluationStatus="unzureichende-evidenz" (siehe
-// company-area-summaries.ts, generateMarketingAreaSummary) — dieselbe ehrliche
-// Behandlung wie Operations, nicht weil Marketing weniger wichtig wäre, sondern
-// weil das Domainmodell keine belastbare State-Bewertung hergibt (siehe
-// observations/marketing-observations.ts für die vollständige Begründung).
+// Marketing (Marketing as First-Class Company Area, seit Marketing Leadership
+// State state-fähig): additive Erweiterung — Marketing ist strukturell
+// gleichrangig zu Sales/People/Operations. state/evaluationStatus hängen von der
+// tatsächlich vorhandenen historischen Evidenz ab (siehe company-area-summaries.ts,
+// generateMarketingAreaSummary, und business-state/marketing-business-state.ts):
+// state=null/evaluationStatus="unzureichende-evidenz", solange nicht genug
+// Lead-Historie für eine belastbare Referenzdichte vorliegt — dieselbe ehrliche
+// Behandlung wie Operations in dieser Phase, aber nicht mehr dauerhaft, sobald die
+// Evidenz reicht.
 export type CompanyAreaKey = "sales" | "marketing" | "people" | "operations";
 
 export type CompanyAreaKind = "department" | "cross-cutting-dimension";

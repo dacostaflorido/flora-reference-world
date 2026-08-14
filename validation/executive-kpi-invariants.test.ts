@@ -227,9 +227,11 @@ describe("Sales Executive KPI Facts — Won Deals (Phase 21)", () => {
   });
 
   it("12. bestehender FullCompanyContext bleibt regressionsfrei", () => {
+    // Seit Marketing Leadership State ist Marketing bei WORLD_NOW bewertet (genug
+    // historische Evidenz) — siehe business-state/marketing-business-state.ts.
     const context = generateFullCompanyContext();
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(context.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["operations"]);
   });
 });
 
@@ -307,9 +309,13 @@ describe("Determinismus & Sortierung (Phase 18/19/28)", () => {
     const withKpis = generateFullCompanyContext();
     // Regressionswerte identisch zu den bereits vor der KPI-Erweiterung etablierten
     // Baseline-Werten (siehe company-state-invariants.test.ts/consumer-contract.test.ts).
+    // Seit Marketing Leadership State ist Marketing bei WORLD_NOW bewertet (genug
+    // historische Evidenz) — evaluatedAreas/insufficientEvidenceAreas entsprechend
+    // aktualisiert; affectedAreas unverändert, da Marketings state ("erhoehte-
+    // nachfrage") weiterhin als affected zählt (siehe company-executive-context.ts).
     expect(withKpis.businessState.type).toBe("ausgeglichen");
-    expect(withKpis.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
-    expect(withKpis.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["marketing", "operations"]);
+    expect(withKpis.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
+    expect(withKpis.businessState.insufficientEvidenceAreas.slice().sort()).toEqual(["operations"]);
     expect(withKpis.executiveContext.affectedAreas.slice().sort()).toEqual(["marketing", "operations"]);
   });
 

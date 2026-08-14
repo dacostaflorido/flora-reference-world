@@ -284,7 +284,15 @@ describe("Marketing Signal Candidates — Separationskraft (Phase 5, Phase 9)", 
         expect(separationSigma, `windowDays=${windowDays}`).toBeLessThan(1.8);
       }
     },
-    20000,
+    // Höher als der globale vitest.config.ts-Default (20s): 18 volle
+    // Weltgenerierungen (6 Seeds × 3 Fenstergrößen), unter voller
+    // Suite-Parallelität mit inzwischen mehr gleichzeitig laufenden,
+    // ebenfalls weltgenerierungslastigen Tests (Marketing Leadership State)
+    // reicht der globale Default nicht mehr zuverlässig — dieselbe reine
+    // Ressourcenkontention wie bei den bereits dokumentierten Fällen, kein
+    // Performance-Regression im getesteten Code selbst (Test lief standalone
+    // durchweg innerhalb weniger Sekunden).
+    45000,
   );
 });
 

@@ -145,6 +145,15 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // Ground-Truth-Auswertung (s. u.), wirkt sich nicht auf
   // GROUND_TRUTH_SNAPSHOTS/PEOPLE_GROUND_TRUTH_SNAPSHOTS aus.
   "marketing-demand-generation-volume": "unterstuetzend",
+
+  // Marketing Leadership State: additiv, vom Compiler erzwungen (s. o.).
+  // "sekundaer" — anders als die reine Volumenzahl oben ist dies die einzige
+  // fachlich neue Achse innerhalb von Marketings eigener Ground Truth (ein
+  // bestätigtes, referenzbasiertes Persistence-Signal statt einer reinen
+  // Momentaufnahme), dieselbe Einstufungslogik wie bei "lead-volume-trend" oben
+  // ("die einzige fachlich neue Achse ... erhält deshalb sekundär"). Läuft
+  // ebenfalls über Marketings eigene, separate Ground-Truth-Auswertung.
+  "marketing-demand-regime-signal": "sekundaer",
 };
 
 // Rein redaktionelle Zuordnung bereits bestehender Observation-Kinds zu thematisch
@@ -191,6 +200,11 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // bestehenden Gruppen (Pipeline/Preis/Team/Accounts/Volumen/Team-Kontinuität/
   // Delivery) passt fachlich zu Lead-Entstehung/Sales-Übergabe.
   "marketing-demand-generation-volume": "Nachfrage",
+
+  // Marketing Leadership State: dieselbe Gruppe "Nachfrage" wie oben — derselbe
+  // Sachverhalt (Lead-Entstehung über Zeit), nur jetzt mit Vergleichsmaßstab statt
+  // reiner Momentaufnahme.
+  "marketing-demand-regime-signal": "Nachfrage",
 };
 
 // Operations Foundation (Reference World v2, Schritt 2, Phase 9/10): der gesamte

@@ -65,7 +65,16 @@ export type ObservationKind =
   // Operations: rein deskriptives Volumen, keine im Domainmodell begründbare
   // Severity-Schwelle vorhanden, daher separate MarketingObservation-Struktur statt
   // des vollen Observation-Interfaces.
-  | "marketing-demand-generation-volume";
+  | "marketing-demand-generation-volume"
+  // Marketing Leadership State: additiv, keine neue Taxonomie. Anders als
+  // "marketing-demand-generation-volume" oben trägt dieser Kind jetzt einen echten
+  // Vergleichsmaßstab (rollierende Referenzdichte + zweifach bestätigte Persistence,
+  // siehe observations/marketing-observations.ts) — die Voraussetzung, die beim
+  // Marketing Evidence Audit noch fehlte. Weiterhin über die separate
+  // MarketingDemandSignalObservation-Struktur statt des vollen Observation-
+  // Interfaces (keine erfundene severity/category — "erhöht"/"unterdrückt" ist ein
+  // reines Niveau-Signal, keine Chance-/Risiko-Bewertung).
+  | "marketing-demand-regime-signal";
 
 export interface Observation {
   id: string;

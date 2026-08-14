@@ -51,11 +51,25 @@ function companyExecutiveContextId(companyBusinessStateId: string, timestamp: st
 // verhält sich für Operations identisch (Operations hat state stets null), deckt
 // Marketing korrekt mit ab, und bleibt für jede künftige state-lose Area ohne
 // weitere Änderung gültig.
+//
+// Marketing Leadership State: Marketings neutraler State heißt bewusst
+// "stabile-nachfrage", NICHT "ausgeglichen" — eine reine String-Wiederverwendung
+// hätte Marketing versehentlich auch in company-business-state.ts' POSITIVE_STATES
+// gezogen (dort ist "ausgeglichen" bereits als gemeinsamer, geteilter String für
+// Sales/People eingetragen) und damit an der Company-weiten Divergenzprüfung
+// teilnehmen lassen — genau das, was marketing-business-state.ts bewusst
+// vermeidet (mehr/weniger Nachfrage ist nicht per se positiv oder belastend).
+// NEUTRAL_STATES ist deshalb eine eigene, explizite Zuordnungstabelle (dieselbe
+// Methode wie POSITIVE_STATES/BELASTET_STATES) statt eines einzelnen
+// String-Vergleichs — "betroffen" bedeutet für Marketing weiterhin "es gibt eine
+// bestätigte Abweichung vom Referenzniveau", nicht "es gibt irgendeinen State".
+const NEUTRAL_STATES = new Set<string>(["ausgeglichen", "stabile-nachfrage"]);
+
 function isAreaAffected(area: CompanyAreaSummary): boolean {
   if (area.state === null) {
     return area.evidenceIds.length > 0;
   }
-  return area.state !== "ausgeglichen";
+  return !NEUTRAL_STATES.has(area.state);
 }
 
 // Phase 15 — topSituations, maximal 3, deterministische Reihenfolge: bewertete

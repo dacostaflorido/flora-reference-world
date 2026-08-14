@@ -163,11 +163,15 @@ describe("Marketing Executive KPI Facts — Determinismus & Sortierung", () => {
     // Hinweis: seit "Marketing as First-Class Company Area" enthält
     // insufficientEvidenceAreas/affectedAreas zusätzlich "marketing" — das ist die
     // separate, bewusste Area-Erweiterung (siehe company-state-invariants.test.ts),
-    // nicht Teil dieses KPI-Contract-Tests. Hier wird nur geprüft, dass die
-    // KPI-Erweiterung selbst keine RNG-Sequenz verschoben hat.
+    // nicht Teil dieses KPI-Contract-Tests. Seit Marketing Leadership State ist
+    // Marketing bei WORLD_NOW zusätzlich in evaluatedAreas enthalten (genug
+    // historische Evidenz für eine Bewertung liegt vor) — ebenfalls eine separate,
+    // bewusste Erweiterung, siehe business-state/marketing-business-state.ts. Hier
+    // wird weiterhin nur geprüft, dass die KPI-Erweiterung selbst keine
+    // RNG-Sequenz verschoben hat.
     const context = generateFullCompanyContext();
     expect(context.businessState.type).toBe("ausgeglichen");
-    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["people", "sales"]);
+    expect(context.businessState.evaluatedAreas.slice().sort()).toEqual(["marketing", "people", "sales"]);
     expect(context.executiveKpis.people.activeHeadcount).toBe(38);
     expect(context.executiveKpis.sales.wonDeals.length).toBeGreaterThan(0);
   });
@@ -236,15 +240,17 @@ describe("Marketing: bewusst NICHT implementierte Facts (Marketing Foundation Au
 // Architekturentscheidung AUFGEHOBEN ("Marketing as First-Class Company Area"):
 // die vorherige Entscheidung "Marketing ist keine Company Area" (Marketing
 // Foundation, Phase 4) galt ausschließlich für den damaligen Evidenzstand. Mit
-// diesem Schritt wird Marketing bewusst zur First-Class Company Area — mit
-// derselben ehrlichen state=null/evaluationStatus="unzureichende-evidenz"-
-// Behandlung wie Operations, nicht mit einer erfundenen Bewertung (siehe
-// company-state-invariants.test.ts für die vollständigen Area-/Aggregations-
-// Invarianten). Der ursprüngliche Test hier prüfte das genaue Gegenteil der
-// jetzt gültigen Architektur und wird durch das untenstehende Gegenstück
-// ersetzt, nicht stillschweigend gelöscht.
-describe("Marketing: First-Class Company Area, aber unzureichende Evidenz (Architekturentscheidung aufgehoben)", () => {
-  it("24. 'marketing' ist ein gültiger CompanyAreaKey — areaSummaries enthält einen Marketing-Eintrag mit state=null/evaluationStatus=unzureichende-evidenz", () => {
+// diesem Schritt wurde Marketing bewusst zur First-Class Company Area — zunächst
+// mit derselben ehrlichen state=null/evaluationStatus="unzureichende-evidenz"-
+// Behandlung wie Operations, nicht mit einer erfundenen Bewertung. Mit Marketing
+// Leadership State (Folgeauftrag) ist diese Behandlung nicht mehr dauerhaft: bei
+// WORLD_NOW liegt inzwischen genug historische Lead-Evidenz für eine belastbare
+// Referenzdichte vor (siehe business-state/marketing-business-state.ts) —
+// Marketing wird dort bewertet, bleibt aber vor diesem Punkt (zu wenig Historie)
+// weiterhin ehrlich unzureichende-evidenz (siehe
+// validation/marketing-area-invariants.test.ts für die asOf-Grenzfälle).
+describe("Marketing: First-Class Company Area (Architekturentscheidung aufgehoben)", () => {
+  it("24. 'marketing' ist ein gültiger CompanyAreaKey — areaSummaries enthält einen Marketing-Eintrag, bei WORLD_NOW bewertet", () => {
     const context = generateFullCompanyContext();
     const summaries = context.executiveContext.areaSummaries;
     const keys = summaries.map((a) => a.key);
@@ -252,13 +258,16 @@ describe("Marketing: First-Class Company Area, aber unzureichende Evidenz (Archi
     expect(keys.slice().sort()).toEqual(["marketing", "operations", "people", "sales"]);
 
     const marketing = summaries.find((a) => a.key === "marketing")!;
-    expect(marketing.state).toBeNull();
-    expect(marketing.evaluationStatus).toBe("unzureichende-evidenz");
+    expect(marketing.state).not.toBeNull();
+    expect(["stabile-nachfrage", "erhoehte-nachfrage", "unterdrueckte-nachfrage"]).toContain(marketing.state);
+    expect(marketing.evaluationStatus).toBe("bewertet");
     expect(marketing.kind).toBe("department");
     expect(marketing.departmentId).toBe("dept-marketing");
     // Trennung Company Area vs. Executive KPIs bleibt bestehen: relevantMetrics
-    // dupliziert nicht dieselben Leads-/Handoff-Zahlen, die bereits über
-    // executiveKpis.marketing öffentlich sind.
-    expect(marketing.relevantMetrics).toEqual({});
+    // dupliziert weiterhin nicht dieselben Leads-/Handoff-Rohzahlen, die bereits
+    // über executiveKpis.marketing öffentlich sind — nur die abgeleiteten
+    // Vergleichszahlen des Regime-Signals sind zusätzlich enthalten.
+    expect(marketing.relevantMetrics).not.toHaveProperty("leadsTotal");
+    expect(marketing.relevantMetrics).not.toHaveProperty("salesHandoffsTotal");
   });
 });

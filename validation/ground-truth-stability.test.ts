@@ -150,6 +150,9 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // in ground-truth.ts. world.observations (SCENARIO_WORLDS) enthält nie
       // Marketing-Kinds — nur für Record-Vollständigkeit erforderlich.
       "marketing-demand-generation-volume": "unterstuetzend",
+      // Marketing Leadership State: additiv, s. GROUND_TRUTH_PRIORITIES in
+      // ground-truth.ts. Nur für Record-Vollständigkeit erforderlich.
+      "marketing-demand-regime-signal": "sekundaer",
     };
 
     for (const profile of SCENARIO_PROFILES) {
@@ -188,6 +191,9 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // Marketing as First-Class Company Area: additiv, s. OBSERVATION_GROUP_LABELS
       // in ground-truth.ts.
       "marketing-demand-generation-volume": "Nachfrage",
+      // Marketing Leadership State: additiv, s. OBSERVATION_GROUP_LABELS in
+      // ground-truth.ts.
+      "marketing-demand-regime-signal": "Nachfrage",
     };
 
     for (const profile of SCENARIO_PROFILES) {

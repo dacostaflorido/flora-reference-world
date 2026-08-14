@@ -5,6 +5,7 @@ import { generateGroundTruthSnapshot } from "../ground-truth/ground-truth";
 import type { Observation } from "../observations/observations";
 import { generatePeopleObservations } from "../observations/people-observations";
 import { generatePeopleBusinessStateSnapshot } from "../business-state/people-business-state";
+import { generateMarketingBusinessStateSnapshot } from "../business-state/marketing-business-state";
 import type { WorldSnapshot } from "../snapshot/snapshot";
 import {
   generateSalesAreaSummary,
@@ -60,16 +61,29 @@ export function generateCompanyContextFromSnapshot(
   );
 
   // Marketing as First-Class Company Area: exakt dieselbe Herleitung wie Operations
-  // oben — snapshot.marketingObservation ist bereits im Snapshot selbst vollständig
-  // vorberechnet (snapshot.ts), keine erneute Ableitung nötig.
+  // oben — snapshot.marketingObservation/snapshot.marketingDemandSignal sind bereits
+  // im Snapshot selbst vollständig vorberechnet (snapshot.ts), keine erneute
+  // Ableitung nötig. Ground Truth führt beide Observation-Kinds derselben Domäne
+  // zusammen (dieselbe generische generateGroundTruthSnapshot-Funktion wie überall
+  // sonst — kein neuer Mechanismus).
   const marketingGroundTruth = generateGroundTruthSnapshot(
-    snapshot.marketingObservation ? [snapshot.marketingObservation] : [],
+    [
+      ...(snapshot.marketingObservation ? [snapshot.marketingObservation] : []),
+      ...(snapshot.marketingDemandSignal ? [snapshot.marketingDemandSignal] : []),
+    ],
     snapshot.asOf,
   );
+  // Marketing Leadership State: nur berechnet, wenn tatsächlich ein Regime-Signal
+  // aktiv ist (genug historische Evidenz) — sonst bleibt Marketing über
+  // generateMarketingAreaSummary bei state=null/evaluationStatus="unzureichende-
+  // evidenz", exakt wie zuvor.
+  const marketingBusinessState = snapshot.marketingDemandSignal
+    ? generateMarketingBusinessStateSnapshot(marketingGroundTruth, snapshot.marketingDemandSignal)
+    : undefined;
 
   const areaSummaries = [
     generateSalesAreaSummary(salesBusinessState, salesExecutiveContext, salesGroundTruth, salesObservations),
-    generateMarketingAreaSummary(snapshot.marketingObservation, marketingGroundTruth),
+    generateMarketingAreaSummary(snapshot.marketingObservation, snapshot.marketingDemandSignal, marketingBusinessState, marketingGroundTruth),
     generatePeopleAreaSummary(peopleBusinessState, peopleGroundTruth, peopleObservations),
     generateOperationsAreaSummary(snapshot.operationsObservation, operationsGroundTruth),
   ];
