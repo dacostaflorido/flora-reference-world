@@ -16,6 +16,14 @@ import type { MeetingTranscript } from "../events/meeting-transcripts";
 import type { CrmActivity } from "../events/crm-activities";
 import { generateKnowledgeObjects, type KnowledgeObject } from "../world/knowledge-objects";
 import { generateDeliveryUnits, type DeliveryUnit } from "../world/delivery-units";
+import {
+  generateDeliveryQueuedEvents,
+  generateDeliveryStartedEvents,
+  generateDeliveryCompletedEvents,
+  type DeliveryQueued,
+  type DeliveryStarted,
+  type DeliveryCompleted,
+} from "../events/delivery-lifecycle";
 import { generateObservations, type Observation } from "../observations/observations";
 import { generateGroundTruthSnapshot, type GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -62,6 +70,14 @@ export interface ScenarioWorldTruth {
   // accountOwnerships/leads/opportunities oben, nicht wie die scenario-unabhängigen
   // Employees.
   deliveryUnits: DeliveryUnit[];
+  // Delivery Commitment Truth + Event Source of Truth: reine, wörtliche
+  // Projektionen der bereits obenstehenden deliveryUnits (siehe
+  // events/delivery-lifecycle.ts für die vollständige Source-of-Truth-Begründung)
+  // — reproduzierbar abrufbar für einen künftigen Operations Observation Evidence
+  // Audit, ohne dass dies Ground Truth/Observations/Public Contract berührt.
+  deliveryQueuedEvents: DeliveryQueued[];
+  deliveryStartedEvents: DeliveryStarted[];
+  deliveryCompletedEvents: DeliveryCompleted[];
   observations: Observation[];
   groundTruth: GroundTruthSnapshot;
 }
@@ -145,6 +161,13 @@ export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfil
     profile.operations,
   );
 
+  // Delivery Commitment Truth + Event Source of Truth (Phase 4.3): wörtliche
+  // Projektion von deliveryUnits, kein eigener Zufallsstrom, keine zweite
+  // Berechnung — siehe events/delivery-lifecycle.ts.
+  const deliveryQueuedEvents = generateDeliveryQueuedEvents(deliveryUnits);
+  const deliveryStartedEvents = generateDeliveryStartedEvents(deliveryUnits);
+  const deliveryCompletedEvents = generateDeliveryCompletedEvents(deliveryUnits);
+
   // --- Events → Observations → Ground Truth (Prinzip 7/17) ----------------------
   // Observations sind ein reiner Analyse-Schritt ohne eigenen Zufallsstrom (keine
   // Rule Engine) — derselbe, unveränderte Code läuft gegen die tatsächlich erzeugte
@@ -176,6 +199,9 @@ export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfil
     crmActivities,
     knowledgeObjects,
     deliveryUnits,
+    deliveryQueuedEvents,
+    deliveryStartedEvents,
+    deliveryCompletedEvents,
     observations,
     groundTruth,
   };

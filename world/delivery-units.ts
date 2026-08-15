@@ -12,25 +12,61 @@ import type { OperationsScenarioConfig } from "../engine/scenario-profiles";
 // erfundene Zuordnung. accountId ist bewusst 1:1 von opportunity.accountId
 // übernommen, nicht neu nachgeschlagen (dieselbe Redundanz-Begründung wie bei
 // Opportunity.accountId selbst: bewusste, invariantengeprüfte Redundanz für
-// Queries). startDate ist exakt opportunity.closedAt (Backward Explainability,
-// Prinzip 18) — nicht aus der Stage-History neu hergeleitet, da closedAt bereits die
-// invariantengeprüfte (checkOpportunityClosedAtConsistency), alleinige
-// Won-Datumsquelle ist.
+// Queries).
+//
+// Real Delivery Lifecycle V1, korrigiert nach verbindlicher CEO-Entscheidung
+// "Delivery Commitment Truth" (siehe events/delivery-lifecycle.ts): eine
+// Lieferverpflichtung entsteht ausschließlich durch eine gewonnene Opportunity —
+// mit dem Won-Zeitpunkt entsteht dabei KEINE automatische Fristzusage. startDate
+// bleibt unverändert exakt opportunity.closedAt (Backward Explainability, Prinzip
+// 18, Wert unverändert) — honest als Queue-Zeitpunkt dokumentiert: die
+// Lieferverpflichtung entsteht und wird eingereiht, sobald der Deal gewonnen ist
+// (kein Datum vor dem Won-Zeitpunkt wäre referenzierbar, ein künstlich verzögertes
+// "Einreihungs"-Datum ohne Quelle wäre erfundene Prozessverzögerung).
+// actualStartDate: der tatsächliche Beginn der Leistungserbringung, deterministisch
+// entity-stabil nach startDate versetzt (Queue-Wartezeit) — nur gesetzt, wenn
+// startDate + Wartezeit <= WORLD_NOW liegt (kein Future Knowledge, dasselbe Muster
+// wie actualEndDate). actualEndDate: echte, unabhängig streuende tatsächliche
+// Lieferdauer ab actualStartDate.
+//
+// plannedEndDate ist bewusst optional und in der aktuellen Reference World bei
+// JEDER DeliveryUnit undefined — es existiert keine kanonische Quelle für ein
+// zugesagtes/geplantes Enddatum (kein Vertrag, kein CRM-Termin, kein
+// Projektmanagement-Datum in diesem Modell). Eine frühere Version dieses Feldes
+// leitete plannedEndDate automatisch aus startDate + einer fixen 30-Tage-Konstante
+// ab — das war eine erfundene Zusage ohne fachliche Grundlage und wurde entfernt.
+// plannedEndDate darf ausschließlich befüllt werden, sobald eine echte
+// Plan-/Vertrags-/Projektmanagementquelle existiert (siehe Canonical Operations
+// Event Blueprint, `HandoffConfirmed`/künftige Planungsevents) — niemals aus Won-,
+// Queue-, Start- oder tatsächlicher Dauer abgeleitet.
 export interface DeliveryUnit {
   id: string;
   opportunityId: string;
   accountId: string;
   assignedEmployeeId: string;
   startDate: string;
-  plannedEndDate: string;
+  actualStartDate?: string;
+  plannedEndDate?: string;
   actualEndDate?: string;
-  status: "laufend" | "abgeschlossen";
+  status: "eingereiht" | "laufend" | "abgeschlossen";
 }
 
-// Zentral benannter Demo-/Scenario-Parameter (freigegebene Domain Decision) — kein
-// Branchenstandard, keine Kalibrierung. Einzige Stelle, an der dieser Wert vorkommt;
-// austauschbar ohne strukturelle Modelländerung.
-export const DELIVERY_ONBOARDING_DURATION_DAYS = 30;
+// Real Delivery Lifecycle V1 — Kalibrierung der TATSÄCHLICHEN Zeiten (siehe
+// Abschlussbericht "Delivery Commitment Truth + Event Source of Truth"): Queue-
+// Wartezeit (Queue → tatsächlicher Start) und tatsächliche Lieferdauer (Start →
+// tatsächlicher Abschluss) sind reale, deterministisch variierende
+// Reference-World-Tatsachen — unabhängig von jeder Planzusage, die es nicht gibt.
+// 18-42 Tage bleibt der kleinste plausible synthetische Bereich für die
+// tatsächliche Lieferdauer: erzeugt bereits bei den 79 Baseline-Units ausreichend
+// unterschiedliche Fälle (kurze/lange Lieferung, eingereiht/aktiv/abgeschlossen bei
+// WORLD_NOW — siehe Abschlussbericht, Phase 5.3-Messung), bleibt unabhängig von der
+// Queue-Dauer (getrennte RNG-Ziehung), keine unmöglichen Zeitfolgen. Transparente,
+// synthetische Reference-World-Kalibrierung — keine Branchenbenchmark-Behauptung,
+// keine Aussage über Planerfüllung.
+export const QUEUE_DELAY_MIN_DAYS = 0;
+export const QUEUE_DELAY_MAX_DAYS = 8;
+export const ACTUAL_DELIVERY_DURATION_MIN_DAYS = 18;
+export const ACTUAL_DELIVERY_DURATION_MAX_DAYS = 42;
 
 function isActiveOperationsEmployee(employee: Employee): boolean {
   return employee.departmentId === "dept-operations" && employee.terminatedAt === undefined;
@@ -64,12 +100,50 @@ function pickByInverseLoad(
   return candidates[candidates.length - 1]!;
 }
 
-// Vereinfachende, redaktionell bewusste v1-Annahme (nicht Teil der freigegebenen
-// Domain Decisions, hier explizit benannt statt stillschweigend eingeführt): jede
-// DeliveryUnit schließt exakt an plannedEndDate ab, keine zusätzliche
-// Verzögerungs-/Beschleunigungs-Zufallsvariable. Eine Einführung von Terminvarianz
-// wäre eine neue, hier nicht beauftragte fachliche Erfindung (zusätzliche
-// Zufallsverteilung ohne Grundlage) — bewusst unterlassen, nicht vergessen.
+// Entity-stabiler Lifecycle-RNG-Teilstrom je Opportunity (dasselbe, bereits
+// etablierte Präzedenzmuster wie MARKETING_DEMAND_SEED_OFFSET in
+// events/generate-sales-pipeline.ts): ein fester additiver Offset plus eine aus
+// opportunity.id abgeleitete, garantiert stabile Zahl — NICHT die Position in
+// wonOpportunities (die sich verschieben würde, sobald irgendeine andere
+// Opportunity gewonnen wird oder wegfällt — verboten laut Real-Delivery-Lifecycle-
+// Auftrag, Phase 4.1/4.2). opportunity.id hat das feste Format "opp-NNNNN"
+// (nextOppId() in generate-sales-pipeline.ts) — die eingebettete Zahl ist ein von
+// Iterationsreihenfolge und Teilmenge vollständig unabhängiger, intrinsischer
+// Schlüssel der Opportunity selbst. Die bestehende pickByInverseLoad-Zuweisung
+// (assignedEmployeeId) bleibt bewusst unverändert auf dem gemeinsamen,
+// sequenziellen rng-Strom — das ist der bereits freigegebene, getestete
+// Fair-Share-Mechanismus (Phase 12/13) und nicht Teil dieses Auftrags; nur die NEUE
+// Lifecycle-Zeitsteuerung erhält den zusätzlichen entity-stabilen Teilstrom.
+const DELIVERY_LIFECYCLE_SEED_OFFSET = 20_000_000;
+
+function opportunityNumericKey(opportunityId: string): number {
+  const match = /^opp-(\d+)$/.exec(opportunityId);
+  if (!match) {
+    throw new Error(`generateDeliveryUnits: unerwartetes Opportunity-ID-Format "${opportunityId}"`);
+  }
+  return parseInt(match[1]!, 10);
+}
+
+function sampleDeliveryLifecycle(
+  lifecycleRng: Rng,
+  queuedAt: string,
+): { actualStartDate: string; actualEndDateRaw: string } {
+  // Feste Ziehungsreihenfolge (Queue-Verzögerung zuerst, dann Lieferdauer) —
+  // deterministisch, entity-lokal, beeinflusst keinen anderen Teilstrom. Beide
+  // Werte sind reale, tatsächliche Zeiten — keiner davon wird gegen eine Planzusage
+  // berechnet, weil keine existiert.
+  const queueDelayDays =
+    Math.floor(lifecycleRng() * (QUEUE_DELAY_MAX_DAYS - QUEUE_DELAY_MIN_DAYS + 1)) + QUEUE_DELAY_MIN_DAYS;
+  const deliveryDurationDays =
+    Math.floor(lifecycleRng() * (ACTUAL_DELIVERY_DURATION_MAX_DAYS - ACTUAL_DELIVERY_DURATION_MIN_DAYS + 1)) +
+    ACTUAL_DELIVERY_DURATION_MIN_DAYS;
+
+  const actualStartDate = addDays(queuedAt, queueDelayDays);
+  const actualEndDateRaw = addDays(actualStartDate, deliveryDurationDays);
+
+  return { actualStartDate, actualEndDateRaw };
+}
+
 const DEFAULT_OPERATIONS_SCENARIO_CONFIG: OperationsScenarioConfig = {
   assignmentStrategy: "balanced",
   concentratedEmployeeIds: [],
@@ -114,8 +188,15 @@ export function generateDeliveryUnits(
     load.set(assignee.id, (load.get(assignee.id) ?? 0) + 1);
 
     const startDate = opportunity.closedAt;
-    const plannedEndDate = addDays(startDate, DELIVERY_ONBOARDING_DURATION_DAYS);
-    const isCompleted = plannedEndDate <= WORLD_NOW;
+    const lifecycleRng = createRng(seed + DELIVERY_LIFECYCLE_SEED_OFFSET + opportunityNumericKey(opportunity.id));
+    const { actualStartDate, actualEndDateRaw } = sampleDeliveryLifecycle(lifecycleRng, startDate);
+
+    // Future-Knowledge-Schutz (unverändertes Muster wie zuvor bei actualEndDate):
+    // ein deterministisch berechneter, aber noch in der Zukunft liegender
+    // Zeitpunkt relativ zu WORLD_NOW wird nicht als bereits eingetretene Wahrheit
+    // gespeichert.
+    const hasStarted = actualStartDate <= WORLD_NOW;
+    const hasCompleted = actualEndDateRaw <= WORLD_NOW;
 
     units.push({
       id: nextId(),
@@ -123,28 +204,54 @@ export function generateDeliveryUnits(
       accountId: opportunity.accountId,
       assignedEmployeeId: assignee.id,
       startDate,
-      plannedEndDate,
-      actualEndDate: isCompleted ? plannedEndDate : undefined,
-      status: isCompleted ? "abgeschlossen" : "laufend",
+      actualStartDate: hasStarted ? actualStartDate : undefined,
+      // plannedEndDate bleibt undefined — keine kanonische Planquelle vorhanden
+      // (siehe DeliveryUnit-Dokumentation oben).
+      plannedEndDate: undefined,
+      actualEndDate: hasCompleted ? actualEndDateRaw : undefined,
+      status: hasCompleted ? "abgeschlossen" : hasStarted ? "laufend" : "eingereiht",
     });
   }
 
   return units;
 }
 
-// Zeitpunktbezogene Aktivitäts-Prüfung (Operations Foundation, Schritt 2, Phase 6):
-// dieselbe exklusive Enddatums-Konvention wie bei OpportunityStageHistory in
+// Zeitpunktbezogene Aktivitäts-Prüfung (Operations Foundation, Schritt 2, Phase 6;
+// Semantik seit Real Delivery Lifecycle V1 korrigiert): "aktiv" bedeutet jetzt
+// tatsächlich gestartet (actualStartDate), nicht mehr bloß eingereiht (startDate).
+// Eine eingereihte, aber noch nicht gestartete Unit ist NICHT aktiv (Real Delivery
+// Lifecycle V1, Phase 3.3: "Ein Snapshot zu einem Zeitpunkt vor
+// DeliveryStarted.startedAt darf die Unit nicht als aktiv behandeln"). Dieselbe
+// exklusive Enddatums-Konvention wie bei OpportunityStageHistory in
 // snapshot/snapshot.ts ("e.exitedAt === undefined || asOf < e.exitedAt"), nicht die
 // inklusive Gültigkeitsintervall-Konvention von AccountOwnership
-// ("asOf <= validTo"). Begründung für die Konsistenzwahl: eine DeliveryUnit ist wie
-// eine Stage ein Zustand, der an actualEndDate endet und in einen neuen Zustand
-// ("abgeschlossen") übergeht — am Tag von actualEndDate selbst ist sie bereits
-// abgeschlossen, nicht mehr aktiv, exakt wie eine Opportunity am Tag ihres exitedAt
-// bereits die nächste Stage erreicht hat, nicht mehr die vorherige.
+// ("asOf <= validTo") — am Tag von actualEndDate selbst ist die Unit bereits
+// abgeschlossen, nicht mehr aktiv.
 export function isDeliveryUnitActiveAt(unit: DeliveryUnit, asOf: string): boolean {
-  return unit.startDate <= asOf && (unit.actualEndDate === undefined || asOf < unit.actualEndDate);
+  return (
+    unit.actualStartDate !== undefined &&
+    unit.actualStartDate <= asOf &&
+    (unit.actualEndDate === undefined || asOf < unit.actualEndDate)
+  );
 }
 
 export function activeDeliveryUnitsAt(units: readonly DeliveryUnit[], asOf: string): DeliveryUnit[] {
   return units.filter((u) => isDeliveryUnitActiveAt(u, asOf));
+}
+
+// Vollständige 3-Wege-Statusableitung (Real Delivery Lifecycle V1, Phase 3.1/3.2):
+// Events sind die zeitliche Source of Truth, dieser Status wird ausschließlich aus
+// den bereits vorhandenen Lifecycle-Zeitstempeln abgeleitet, keine zweite,
+// unabhängig widersprüchliche Wahrheit. Nur sinnvoll für Units, die zu asOf bereits
+// existieren (startDate <= asOf) — exakt dieselbe Existenz-Voraussetzung, die
+// snapshot.ts bereits für deliveryUnits durchsetzt, bevor diese Funktion aufgerufen
+// wird.
+export function deliveryUnitStatusAt(unit: DeliveryUnit, asOf: string): "eingereiht" | "laufend" | "abgeschlossen" {
+  if (unit.actualEndDate !== undefined && asOf >= unit.actualEndDate) {
+    return "abgeschlossen";
+  }
+  if (unit.actualStartDate !== undefined && unit.actualStartDate <= asOf) {
+    return "laufend";
+  }
+  return "eingereiht";
 }

@@ -280,13 +280,17 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
     const context = generateFullCompanyContext();
     expect(context.executiveKpis).not.toHaveProperty("operations");
 
+    // Real Delivery Lifecycle V1: "aktiv" bedeutet jetzt tatsächlich gestartet
+    // (actualStartDate), nicht mehr bloß eingereiht — siehe
+    // validation/operations-invariants.test.ts, "Baseline-Fakten bei WORLD_NOW..."
+    // für die vollständige Kausalkette.
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
-      activeDeliveryUnits: 21,
-      maxAssignedCount: 11,
-      fairShare: 7,
-      maxShare: 11 / 21,
-      fairShareRatio: 1.5714285714285714,
+      activeDeliveryUnits: 15,
+      maxAssignedCount: 9,
+      fairShare: 5,
+      maxShare: 9 / 15,
+      fairShareRatio: 1.8,
     });
   });
 

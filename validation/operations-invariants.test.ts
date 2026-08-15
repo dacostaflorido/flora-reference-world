@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  generateDeliveryUnits,
-  DELIVERY_ONBOARDING_DURATION_DAYS,
-  isDeliveryUnitActiveAt,
-  activeDeliveryUnitsAt,
-  type DeliveryUnit,
-} from "../world/delivery-units";
+import { generateDeliveryUnits, isDeliveryUnitActiveAt, activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
 import { EMPLOYEES } from "../world/employees";
-import { daysBetween, addDays } from "../engine/random";
+import { addDays } from "../engine/random";
 import { SCENARIO_WORLDS } from "../engine/generator";
 import { SCENARIO_PROFILES } from "../engine/scenario-profiles";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -62,9 +56,15 @@ describe("DeliveryUnit-Invarianten (Operations Foundation, Schritt 2)", () => {
     }
   });
 
-  it("6. plannedEndDate === startDate + DELIVERY_ONBOARDING_DURATION_DAYS", () => {
+  // Delivery Commitment Truth: eine gewonnene Opportunity erzeugt keine
+  // automatische Fristzusage. plannedEndDate ist deshalb bei JEDER DeliveryUnit
+  // undefined — es existiert keine kanonische Plan-/Vertrags-/
+  // Projektmanagementquelle in diesem Modell (siehe world/delivery-units.ts,
+  // DeliveryUnit-Dokumentation). Ersetzt die vorherige, fachlich falsche Annahme
+  // "plannedEndDate === startDate + 30 Tage".
+  it("6. plannedEndDate ist bei jeder DeliveryUnit undefined (keine erfundene Fristzusage)", () => {
     for (const du of world.deliveryUnits) {
-      expect(daysBetween(du.startDate, du.plannedEndDate), du.id).toBe(DELIVERY_ONBOARDING_DURATION_DAYS);
+      expect(du.plannedEndDate, du.id).toBeUndefined();
     }
   });
 
@@ -118,26 +118,39 @@ describe("DeliveryUnit-Invarianten (Operations Foundation, Schritt 2)", () => {
   });
 });
 
-describe("Zeitabhängige DeliveryUnit-Sicht (Phase 6): startDate <= X && (kein actualEndDate || X < actualEndDate)", () => {
+describe("Zeitabhängige DeliveryUnit-Sicht (Phase 6, Semantik seit Real Delivery Lifecycle V1 korrigiert): actualStartDate <= X && (kein actualEndDate || X < actualEndDate)", () => {
   const wonDate = "2025-01-10";
-  const actualEnd = addDays(wonDate, DELIVERY_ONBOARDING_DURATION_DAYS);
+  // actualStartDate hier bewusst identisch zu wonDate (queueDelayDays=0) — diese
+  // Testgruppe prüft die reine start/end-Grenzlogik von isDeliveryUnitActiveAt,
+  // nicht die Kalibrierung der Queue-Verzögerung selbst (separat in
+  // delivery-lifecycle.test.ts getestet). Die "30" hier ist ein rein testlokaler
+  // Abstand für die Fixture-Zeitachse, keine Produktionskonstante mehr (Delivery
+  // Commitment Truth: es gibt keine Fristzusage) — plannedEndDate bleibt bewusst
+  // ungesetzt, exakt wie in der Produktion.
+  const actualEnd = addDays(wonDate, 30);
   const runningUnit: DeliveryUnit = {
     id: "test-du-running",
     opportunityId: "test-opp",
     accountId: "test-account",
     assignedEmployeeId: "emp-henrik-paulsen",
     startDate: wonDate,
-    plannedEndDate: actualEnd,
+    actualStartDate: wonDate,
     status: "laufend",
   };
   const completedUnit: DeliveryUnit = { ...runningUnit, id: "test-du-completed", actualEndDate: actualEnd, status: "abgeschlossen" };
 
-  it("Tag vor Won-Date: nicht aktiv", () => {
+  it("Tag vor tatsächlichem Start: nicht aktiv", () => {
     expect(isDeliveryUnitActiveAt(runningUnit, addDays(wonDate, -1))).toBe(false);
   });
 
-  it("am Won-Date selbst: aktiv", () => {
+  it("am tatsächlichen Start-Tag selbst: aktiv", () => {
     expect(isDeliveryUnitActiveAt(runningUnit, wonDate)).toBe(true);
+  });
+
+  it("noch eingereiht (kein actualStartDate): nicht aktiv, auch nicht am/nach dem Queue-Zeitpunkt", () => {
+    const queuedOnly: DeliveryUnit = { ...runningUnit, id: "test-du-queued", actualStartDate: undefined, status: "eingereiht" };
+    expect(isDeliveryUnitActiveAt(queuedOnly, wonDate)).toBe(false);
+    expect(isDeliveryUnitActiveAt(queuedOnly, addDays(wonDate, 100))).toBe(false);
   });
 
   it("zwischen Start und (geplantem/tatsächlichem) Ende: aktiv", () => {
@@ -153,12 +166,17 @@ describe("Zeitabhängige DeliveryUnit-Sicht (Phase 6): startDate <= X && (kein a
     expect(isDeliveryUnitActiveAt(completedUnit, addDays(actualEnd, 5))).toBe(false);
   });
 
-  it("ohne actualEndDate (weiterhin laufend) bleibt auch nach dem geplanten Enddatum aktiv — keine Annahme über ein nicht eingetretenes Ereignis", () => {
+  it("ohne actualEndDate (weiterhin laufend) bleibt auch weit über die Fixture-Zeitachse hinaus aktiv — keine Annahme über ein nicht eingetretenes Ereignis", () => {
     expect(isDeliveryUnitActiveAt(runningUnit, addDays(actualEnd, 100))).toBe(true);
   });
 
-  it("keine Zukunftskenntnis: eine Unit mit startDate in der Zukunft relativ zu asOf ist nicht aktiv, unabhängig von actualEndDate", () => {
-    const futureUnit: DeliveryUnit = { ...runningUnit, id: "test-du-future", startDate: "2099-01-01" };
+  it("keine Zukunftskenntnis: eine Unit mit actualStartDate in der Zukunft relativ zu asOf ist nicht aktiv, unabhängig von actualEndDate", () => {
+    const futureUnit: DeliveryUnit = {
+      ...runningUnit,
+      id: "test-du-future",
+      startDate: "2099-01-01",
+      actualStartDate: "2099-01-01",
+    };
     expect(isDeliveryUnitActiveAt(futureUnit, WORLD_NOW)).toBe(false);
   });
 
@@ -193,35 +211,43 @@ describe("Operations Fair-Share-Observation (Phase 7/8): schwellenfrei, rein des
   const observation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW)!;
 
   // Marketing Demand Model — World Generation First / Sales Ownership Decoupling:
-  // diese Werte änderten sich mehrfach (10/4/4/2 → 17/5/5/7 → 15/5/3/7 →
-  // final 21/11/7/3), weil (a) Lead.createdAt aus einem eigenen, unabhängigen
-  // `demandRng`-Strom kommt statt aus der bisherigen Gleichverteilung über `rng`
-  // und (b) dieser Strom seit dem Decoupling-Auftrag entity-stabil je Lead-Index
-  // statt gemeinsam sequenziell verbraucht wird (siehe
-  // events/generate-sales-pipeline.ts, MARKETING_DEMAND_SEED_OFFSET-Kommentar).
-  // DeliveryUnits sind über Opportunity.closedAt kausal an die Sales-Pipeline
-  // gekoppelt (company-area-summaries.ts: "Sales → Operations Kausalkette") — ein
-  // anderer Zufallsstrom für Lead-Timing verschiebt zwangsläufig, welche
-  // Opportunities wann gewinnen und damit, wie viele DeliveryUnits zum
-  // WORLD_NOW-Stichtag noch im 30-Tage-Onboarding-Fenster aktiv sind. Finaler
-  // Wert nach Umstellung auf die entity-stabile Architektur UND die stärkere,
-  // jetzt Sales-sichere Kalibrierung (elevated=1.2/84d, suppressed=0.6/84d)
-  // gemessen. Sales' eigene Kernklassifikation (businessState.type) bleibt über
-  // alle 6 Scenario-Profile hinweg unverändert — nur dieser nachgelagerte,
-  // zeitfenster-sensible Operations-Fakt verschiebt sich.
-  it("Baseline-Fakten bei WORLD_NOW entsprechen den in Phase 7 gemessenen Werten", () => {
+  // diese Werte änderten sich mehrfach (10/4/4/2 → 17/5/5/7 → 15/5/3/7 → 21/11/7/3),
+  // weil (a) Lead.createdAt aus einem eigenen, unabhängigen `demandRng`-Strom kommt
+  // statt aus der bisherigen Gleichverteilung über `rng` und (b) dieser Strom seit
+  // dem Decoupling-Auftrag entity-stabil je Lead-Index statt gemeinsam sequenziell
+  // verbraucht wird (siehe events/generate-sales-pipeline.ts,
+  // MARKETING_DEMAND_SEED_OFFSET-Kommentar). DeliveryUnits sind über
+  // Opportunity.closedAt kausal an die Sales-Pipeline gekoppelt
+  // (company-area-summaries.ts: "Sales → Operations Kausalkette") — ein anderer
+  // Zufallsstrom für Lead-Timing verschiebt zwangsläufig, welche Opportunities
+  // wann gewinnen.
+  //
+  // Real Delivery Lifecycle V1: zusätzlicher, unabhängiger Kausalpfad — "aktiv"
+  // bedeutet jetzt tatsächlich gestartet (actualStartDate, entity-stabile
+  // Queue-Verzögerung 0-8 Tage + reale Lieferdauer 18-42 Tage, siehe
+  // world/delivery-units.ts), nicht mehr bloß eingereiht (startDate ==
+  // opportunity.closedAt). Bei denselben 79 Won-Opportunities sinkt die aktive
+  // Menge dadurch von 21 auf 15: mehr Units sind bei WORLD_NOW bereits wieder
+  // abgeschlossen (57 von 79, echte Varianz statt fixer 30-Tage-Konstante) oder
+  // noch eingereiht (7 von 79, Queue-Verzögerung reicht über WORLD_NOW hinaus),
+  // statt wie zuvor pauschal "aktiv, bis exakt 30 Tage nach Won verstrichen sind".
+  // Kausalkette für jeden geänderten Wert: Won Opportunity → DeliveryQueued
+  // (startDate=closedAt) → DeliveryStarted (actualStartDate, entity-stabiler
+  // Lifecycle-RNG) → DeliveryCompleted oder weiterhin aktiv →
+  // activeDeliveryUnitsAt(WORLD_NOW) → Fair-Share-Observation.
+  it("Baseline-Fakten bei WORLD_NOW entsprechen den nach Real Delivery Lifecycle V1 gemessenen Werten", () => {
     expect(observation).toBeDefined();
-    expect(observation.activeDeliveryUnitsTotal).toBe(21);
+    expect(observation.activeDeliveryUnitsTotal).toBe(15);
     expect(observation.activeUnitsByEmployeeId).toEqual({
-      "emp-henrik-paulsen": 11,
-      "emp-greta-lohmann": 7,
-      "emp-marc-oldenburg": 3,
+      "emp-henrik-paulsen": 9,
+      "emp-greta-lohmann": 5,
+      "emp-marc-oldenburg": 1,
     });
-    expect(observation.fairShare).toBeCloseTo(21 / 3, 10);
-    expect(observation.maxAssignedCount).toBe(11);
+    expect(observation.fairShare).toBeCloseTo(15 / 3, 10);
+    expect(observation.maxAssignedCount).toBe(9);
     expect(observation.maxAssignedEmployeeId).toBe("emp-henrik-paulsen");
-    expect(observation.maxShare).toBeCloseTo(11 / 21, 10);
-    expect(observation.fairShareRatio).toBeCloseTo(11 / 21 / (1 / 3), 10);
+    expect(observation.maxShare).toBeCloseTo(9 / 15, 10);
+    expect(observation.fairShareRatio).toBeCloseTo(9 / 15 / (1 / 3), 10);
   });
 
   it("derivedFrom referenziert exakt die aktiven DeliveryUnit-IDs, keine anderen", () => {
@@ -262,7 +288,7 @@ describe("Zero-Active-Explainability-Fix (Operations Evidence Audit, Phase C)", 
     accountId: "test-account-1",
     assignedEmployeeId: "emp-henrik-paulsen",
     startDate: "2025-01-01",
-    plannedEndDate: "2025-01-31",
+    actualStartDate: "2025-01-01",
     actualEndDate: "2025-01-31",
     status: "abgeschlossen",
   };
@@ -279,9 +305,9 @@ describe("Zero-Active-Explainability-Fix (Operations Evidence Audit, Phase C)", 
     opportunityId: "test-opp-future",
     accountId: "test-account-future",
     startDate: "2099-01-01",
-    plannedEndDate: "2099-01-31",
+    actualStartDate: undefined,
     actualEndDate: undefined,
-    status: "laufend",
+    status: "eingereiht",
   };
   const runningUnit: DeliveryUnit = {
     ...completed1,
@@ -334,17 +360,41 @@ describe("Zero-Active-Explainability-Fix (Operations Evidence Audit, Phase C)", 
     expect(runA).toEqual(runB);
   });
 
-  it("6. reale Baseline-Tage (29.03.-01.04.2025): geprüfte, nicht-leere Population statt leerem derivedFrom", () => {
-    const startedByThen = new Set(world.deliveryUnits.filter((u) => u.startDate <= "2025-03-29").map((u) => u.id));
-    for (const asOf of ["2025-03-29", "2025-03-30", "2025-03-31", "2025-04-01"]) {
-      const obs = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, asOf)!;
-      expect(obs.activeDeliveryUnitsTotal, asOf).toBe(0);
-      expect(obs.derivedFrom.length, asOf).toBeGreaterThan(0);
-      expect(obs.derivedFrom.length, asOf).toBe(startedByThen.size);
-      for (const id of obs.derivedFrom) {
-        expect(startedByThen.has(id), `${asOf}: ${id}`).toBe(true);
+  // 6. Ursprünglich ein Regressionstest gegen vier konkrete reale Baseline-Tage
+  // (29.03.-01.04.2025), an denen die alte, feste 30-Tage-Konstante einen
+  // Zero-Active-mit-Population-Fall erzeugte. Real Delivery Lifecycle V1 fügt echte
+  // Queue-/Lieferdauer-Varianz hinzu, wodurch Abschlüsse über die Zeit gestreut
+  // statt in starren 30-Tage-Kohorten gebündelt werden — an den ursprünglichen vier
+  // Tagen tritt der Fall in der aktuellen Baseline dadurch nicht mehr auf (geprüft:
+  // 0 Tage im gesamten Zeitraum). Statt eines jetzt gegenstandslosen
+  // Datums-Regressionstests prüft dieser Test die zugrunde liegende Invariante
+  // direkt über den vollständigen realen Zeitraum: an JEDEM Tag, an dem
+  // "aktiv=0" gilt, muss derivedFrom exakt der bereits gestarteten Population
+  // entsprechen — unabhängig davon, ob ein solcher Tag aktuell existiert.
+  it("6. echte Baseline-Welt, gesamter Zeitraum: an jedem Zero-Active-Tag entspricht derivedFrom exakt der bereits gestarteten Population", () => {
+    const sorted = [...world.deliveryUnits].sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+    let cursor = sorted[0]!.startDate;
+    let daysChecked = 0;
+    let zeroActiveDaysFound = 0;
+    while (cursor <= WORLD_NOW && daysChecked < 400) {
+      const startedByThen = new Set(world.deliveryUnits.filter((u) => u.startDate <= cursor).map((u) => u.id));
+      const obs = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, cursor)!;
+      if (obs.activeDeliveryUnitsTotal === 0 && startedByThen.size > 0) {
+        zeroActiveDaysFound++;
+        expect(obs.derivedFrom.length, cursor).toBe(startedByThen.size);
+        for (const id of obs.derivedFrom) {
+          expect(startedByThen.has(id), `${cursor}: ${id}`).toBe(true);
+        }
       }
+      cursor = addDays(cursor, 1);
+      daysChecked++;
     }
+    // Dokumentiert den aktuellen Stand explizit, statt ihn stillschweigend
+    // vorauszusetzen — bei 0 gefundenen Tagen prüft die Schleife oben zwar nichts
+    // Zusätzliches, die synthetischen Tests 1/2/2b/7/8/9/10 decken den Fall aber
+    // bereits unabhängig von der realen Baseline-Welt vollständig ab.
+    expect(daysChecked).toBeGreaterThan(0);
+    expect(zeroActiveDaysFound).toBe(0);
   });
 
   it("7./8. keine leeren oder unbekannten IDs in derivedFrom (Zero-Active-Fall)", () => {
@@ -458,17 +508,17 @@ describe("ScenarioProfile.operations / Concentrated-Modus (Phase 12/13)", () => 
     const countFor = (units: DeliveryUnit[], employeeId: string) =>
       units.filter((u) => u.assignedEmployeeId === employeeId).length;
 
-    // Tatsächlich gemessene Werte (Sales Ownership / Marketing Demand
-    // Decoupling, siehe Erklärung bei "Baseline-Fakten bei WORLD_NOW..." oben:
-    // world.opportunities hat sich durch die entity-stabile demandRng-Architektur
-    // UND die stärkere Kalibrierung verschoben, daher auch die absoluten Zahlen
-    // hier):
-    // Balanced: Henrik 11, Greta 7, Marc 3 von 21 aktiven Units.
-    // Concentrated: Henrik 15, Greta 4, Marc 2 von 21 aktiven Units.
-    expect(activeBalanced.length).toBe(21);
-    expect(countFor(activeBalanced, "emp-henrik-paulsen")).toBe(11);
-    expect(activeConcentrated.length).toBe(21);
-    expect(countFor(activeConcentrated, "emp-henrik-paulsen")).toBe(15);
+    // Tatsächlich gemessene Werte nach Real Delivery Lifecycle V1 (siehe Erklärung
+    // bei "Baseline-Fakten bei WORLD_NOW..." oben: "aktiv" bedeutet jetzt
+    // tatsächlich gestartet, nicht mehr bloß eingereiht — dieselben 79
+    // Won-Opportunities, aber weniger davon sind bei WORLD_NOW noch im aktiven
+    // Fenster):
+    // Balanced: Henrik 9, Greta 5, Marc 1 von 15 aktiven Units.
+    // Concentrated: Henrik 13, Greta 2, Marc 0 von 15 aktiven Units.
+    expect(activeBalanced.length).toBe(15);
+    expect(countFor(activeBalanced, "emp-henrik-paulsen")).toBe(9);
+    expect(activeConcentrated.length).toBe(15);
+    expect(countFor(activeConcentrated, "emp-henrik-paulsen")).toBe(13);
 
     // Die Kernaussage von Phase 13: sichtbar unterschiedlich, keine Aussage darüber,
     // ob/ab wann das "Engpass" bedeutet.
@@ -538,13 +588,13 @@ describe("Snapshot-Integration (Phase 14): DeliveryUnits/Operations Observation,
     expect(snapshot.deliveryUnits.length).toBeLessThan(world.deliveryUnits.length);
   });
 
-  // Marketing Demand Model — World Generation First: siehe Erklärung bei
-  // "Baseline-Fakten bei WORLD_NOW..." weiter oben in dieser Datei.
-  it("Snapshot bei WORLD_NOW: identisch zu den bereits in Phase 7 verifizierten Baseline-Fakten", () => {
+  // Real Delivery Lifecycle V1: siehe Erklärung bei "Baseline-Fakten bei
+  // WORLD_NOW..." weiter oben in dieser Datei.
+  it("Snapshot bei WORLD_NOW: identisch zu den nach Real Delivery Lifecycle V1 verifizierten Baseline-Fakten", () => {
     const snapshot = generateWorldSnapshot(toSource(), WORLD_NOW);
-    expect(snapshot.activeDeliveryUnits.length).toBe(21);
-    expect(snapshot.operationsObservation!.activeDeliveryUnitsTotal).toBe(21);
-    expect(snapshot.operationsObservation!.maxAssignedCount).toBe(11);
+    expect(snapshot.activeDeliveryUnits.length).toBe(15);
+    expect(snapshot.operationsObservation!.activeDeliveryUnitsTotal).toBe(15);
+    expect(snapshot.operationsObservation!.maxAssignedCount).toBe(9);
   });
 
   it("keine zukünftigen Won-Deals: eine DeliveryUnit deren Opportunity erst nach asOf schließt, erscheint nicht im Snapshot", () => {
