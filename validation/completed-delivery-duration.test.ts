@@ -386,7 +386,7 @@ describe("Integration", () => {
   it("40. Operations Area Summary referenziert Evidence korrekt (beide Observations kombiniert)", () => {
     const fairShare = generateOperationsDeliveryFairShareObservation(units, EMPLOYEES, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot([fairShare!, baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(fairShare, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, baselineObservation, undefined, groundTruth);
     expect(summary.topObservations.length).toBe(2);
     expect(summary.topObservations.map((o) => o.id)).toContain(baselineObservation.id);
     expect(summary.relevantMetrics.completedDeliveryUnitsTotal).toBe(57);
@@ -435,10 +435,16 @@ describe("Regression", () => {
       [
         ...(snapshot.operationsObservation ? [snapshot.operationsObservation] : []),
         ...(snapshot.completedDeliveryDurationObservation ? [snapshot.completedDeliveryDurationObservation] : []),
+        ...(snapshot.queueDurationObservation ? [snapshot.queueDurationObservation] : []),
       ],
       WORLD_NOW,
     );
-    const summary = generateOperationsAreaSummary(snapshot.operationsObservation, snapshot.completedDeliveryDurationObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(
+      snapshot.operationsObservation,
+      snapshot.completedDeliveryDurationObservation,
+      snapshot.queueDurationObservation,
+      groundTruth,
+    );
     expect(summary.state).toBeNull();
     expect(summary.evaluationStatus).toBe("unzureichende-evidenz");
   });

@@ -284,9 +284,12 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
     // (actualStartDate), nicht mehr bloß eingereiht — siehe
     // validation/operations-invariants.test.ts, "Baseline-Fakten bei WORLD_NOW..."
     // für die vollständige Kausalkette. Completed Delivery Duration Observation V1
-    // (Delivery Commitment Truth Auftrag): vier zusätzliche Schlüssel aus der neuen,
-    // additiven Observation — 57 bis WORLD_NOW abgeschlossene DeliveryUnits, Dauer
-    // 18-42 Tage, Median 33 (siehe validation/completed-delivery-duration.test.ts).
+    // (Delivery Commitment Truth Auftrag): vier zusätzliche Schlüssel — 57 bis
+    // WORLD_NOW abgeschlossene DeliveryUnits, Dauer 18-42 Tage, Median 33 (siehe
+    // validation/completed-delivery-duration.test.ts). Queue Duration Observation
+    // V1: weitere vier Schlüssel — 72 bis WORLD_NOW bereits gestartete
+    // DeliveryUnits, Wartezeit 0-8 Tage, Median 3 (siehe
+    // validation/queue-duration.test.ts).
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
       activeDeliveryUnits: 15,
@@ -298,6 +301,10 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
       durationDaysMedian: 33,
       durationDaysMin: 18,
       durationDaysMax: 42,
+      startedDeliveryUnitsTotal: 72,
+      queueDurationDaysMedian: 3,
+      queueDurationDaysMin: 0,
+      queueDurationDaysMax: 8,
     });
   });
 

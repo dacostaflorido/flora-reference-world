@@ -4,7 +4,11 @@ import type { PeopleBusinessStateSnapshot } from "../business-state/people-busin
 import type { MarketingBusinessStateSnapshot } from "../business-state/marketing-business-state";
 import type { GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import type { Observation } from "../observations/observations";
-import type { OperationsObservation, CompletedDeliveryDurationObservation } from "../observations/operations-observations";
+import type {
+  OperationsObservation,
+  CompletedDeliveryDurationObservation,
+  QueueDurationObservation,
+} from "../observations/operations-observations";
 import type { MarketingObservation, MarketingDemandSignalObservation } from "../observations/marketing-observations";
 import type { CompanyAreaObservationSummary, CompanyAreaSummary } from "./company-area";
 
@@ -82,33 +86,37 @@ export function generatePeopleAreaSummary(
 
 // OPERATIONS ---------------------------------------------------------------
 // Quellen: Operations Fair-Share-Observation, Completed Delivery Duration
-// Observation (Delivery-Commitment-Truth-Auftrag), Operations Ground Truth.
-// state bleibt zwingend null, evaluationStatus zwingend "unzureichende-evidenz" —
-// Operations besitzt keinen Business State (Domain Decision 3) und keine der
-// beiden Observations verändert das (beide sind rein deskriptiv, ohne
-// Bewertungsgrundlage). statement bleibt bewusst ausschließlich die Fair-Share-
-// Aussage (unverändertes Verhalten, bestehender Consumer Contract) — die neue
-// Completed-Delivery-Duration-Aussage wird additiv über topObservations
-// exponiert, exakt demselben Muster wie Marketings zweite Observation
-// (generateMarketingAreaSummary oben: mehrere aktive Observations, aber ein
-// einzelnes, weiterhin eindeutiges statement-Feld). completedDeliveryDuration ist
-// optional: undefined, wenn zu diesem Zeitpunkt keine DeliveryUnit bereits
-// abgeschlossen ist (siehe generateOperationsCompletedDeliveryDurationObservation)
-// — dann keine Teilnahme an topObservations/relevantMetrics/evidenceIds, kein
-// erfundener Ersatzinhalt.
+// Observation, Queue Duration Observation (Delivery-Commitment-Truth-Auftrag und
+// Nachfolgeaufträge), Operations Ground Truth. state bleibt zwingend null,
+// evaluationStatus zwingend "unzureichende-evidenz" — Operations besitzt keinen
+// Business State (Domain Decision 3) und keine der drei Observations verändert
+// das (alle rein deskriptiv, ohne Bewertungsgrundlage). statement bleibt bewusst
+// ausschließlich die Fair-Share-Aussage (unverändertes Verhalten, bestehender
+// Consumer Contract) — die beiden Dauer-Observations werden additiv über
+// topObservations exponiert, exakt demselben Muster wie Marketings zweite
+// Observation (generateMarketingAreaSummary oben: mehrere aktive Observations,
+// aber ein einzelnes, weiterhin eindeutiges statement-Feld). Beide Dauer-
+// Observations sind optional: undefined, wenn zu diesem Zeitpunkt keine
+// DeliveryUnit bereits abgeschlossen bzw. gestartet ist — dann keine Teilnahme an
+// topObservations/relevantMetrics/evidenceIds, kein erfundener Ersatzinhalt.
 export function generateOperationsAreaSummary(
   observation: OperationsObservation | undefined,
   completedDeliveryDuration: CompletedDeliveryDurationObservation | undefined,
+  queueDuration: QueueDurationObservation | undefined,
   groundTruth: GroundTruthSnapshot,
 ): CompanyAreaSummary {
   const isActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
   const isDurationActive =
     completedDeliveryDuration !== undefined && groundTruth.activeObservationIds.includes(completedDeliveryDuration.id);
+  const isQueueDurationActive = queueDuration !== undefined && groundTruth.activeObservationIds.includes(queueDuration.id);
 
   const topObservations: CompanyAreaObservationSummary[] = [
     ...(isActive ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }] : []),
     ...(isDurationActive
       ? [{ id: completedDeliveryDuration!.id, statement: completedDeliveryDuration!.statement, confidence: completedDeliveryDuration!.confidence }]
+      : []),
+    ...(isQueueDurationActive
+      ? [{ id: queueDuration!.id, statement: queueDuration!.statement, confidence: queueDuration!.confidence }]
       : []),
   ];
 
@@ -130,18 +138,27 @@ export function generateOperationsAreaSummary(
           durationDaysMax: completedDeliveryDuration!.durationDaysMax,
         }
       : {}),
+    ...(isQueueDurationActive
+      ? {
+          startedDeliveryUnitsTotal: queueDuration!.startedDeliveryUnitsTotal,
+          queueDurationDaysMedian: queueDuration!.queueDurationDaysMedian,
+          queueDurationDaysMin: queueDuration!.queueDurationDaysMin,
+          queueDurationDaysMax: queueDuration!.queueDurationDaysMax,
+        }
+      : {}),
   };
 
-  // evidenceIds: Vereinigung beider aktiven Observation-Evidenzketten (dedupliziert,
-  // beide sind gleichrangige, unterstützende Evidenz — anders als bei Marketing gibt
-  // es hier keine Bewertungshierarchie/isEvaluated-Unterscheidung, die eine Quelle
-  // gegenüber der anderen bevorzugen müsste). isAreaAffected (company-executive-
-  // context.ts) prüft für state=null-Areas ausschließlich evidenceIds.length > 0 —
-  // generisch unverändert, keine Sonderbehandlung nötig.
+  // evidenceIds: Vereinigung aller aktiven Observation-Evidenzketten (dedupliziert,
+  // alle drei sind gleichrangige, unterstützende Evidenz — anders als bei Marketing
+  // gibt es hier keine Bewertungshierarchie/isEvaluated-Unterscheidung, die eine
+  // Quelle gegenüber einer anderen bevorzugen müsste). isAreaAffected (company-
+  // executive-context.ts) prüft für state=null-Areas ausschließlich
+  // evidenceIds.length > 0 — generisch unverändert, keine Sonderbehandlung nötig.
   const evidenceIds = [
     ...new Set([
       ...(isActive ? observation!.derivedFrom : []),
       ...(isDurationActive ? completedDeliveryDuration!.derivedFrom : []),
+      ...(isQueueDurationActive ? queueDuration!.derivedFrom : []),
     ]),
   ];
 

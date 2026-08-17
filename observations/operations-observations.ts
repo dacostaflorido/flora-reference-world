@@ -257,3 +257,95 @@ export function generateOperationsCompletedDeliveryDurationObservation(
     derivedFrom: completed.map((u) => u.id),
   };
 }
+
+// Queue Duration Observation V1: beantwortet ausschließlich, wie lange es bei den
+// bis zu asOf bereits gestarteten DeliveryUnits vom Entstehen der
+// Lieferverpflichtung (DeliveryQueued.queuedAt == DeliveryUnit.startDate) bis zum
+// tatsächlichen Delivery-Start (actualStartDate) dauerte. Anders als die Completed
+// Delivery Duration Observation ist KEIN Completion Event erforderlich — laufende
+// UND bereits abgeschlossene Units zählen beide zur Population, solange sie
+// tatsächlich gestartet sind. Kind-Name bewusst "completed-queue-duration": die
+// QUEUE-Phase ist abgeschlossen (die Unit hat gestartet), nicht die Delivery-Phase
+// — parallel zur Namensstruktur von "operations-completed-delivery-duration",
+// vermeidet die im Auftrag ausdrücklich verbotene "current"/"laufend"-Lesart.
+// derivedFrom referenziert DeliveryUnit-IDs, dieselbe Konsistenzentscheidung wie
+// oben. KEIN Observation (Phase-9-Begründung wie überall in dieser Datei).
+export interface QueueDurationObservation {
+  id: string;
+  kind: ObservationKind;
+  generatedAt: string;
+  area: "Delivery";
+  statement: string;
+  confidence: Observation["confidence"];
+  startedDeliveryUnitsTotal: number;
+  queueDurationDaysMedian: number;
+  queueDurationDaysMin: number;
+  queueDurationDaysMax: number;
+  populationQueuedAt: string;
+  populationStartedAt: string;
+  derivedFrom: string[];
+}
+
+// Population: startDate <= asOf UND actualStartDate !== undefined UND
+// actualStartDate <= asOf (beide Bedingungen explizit geprüft, obwohl
+// actualStartDate <= asOf die erste rechnerisch bereits impliziert —
+// actualStartDate ist als startDate + Wartezeit>=0 definiert, siehe
+// world/delivery-units.ts — explizite Prüfung dient ausschließlich der
+// Lesbarkeit/Auditierbarkeit, keine funktionale Notwendigkeit). Eingereihte
+// Units (kein actualStartDate) und zukünftige Starts (actualStartDate > asOf)
+// sind ausgeschlossen; Completion wird nicht verlangt.
+export function generateOperationsQueueDurationObservation(
+  deliveryUnits: readonly DeliveryUnit[],
+  asOf: string,
+): QueueDurationObservation | undefined {
+  const started = deliveryUnits.filter(
+    (u): u is DeliveryUnit & { actualStartDate: string } =>
+      u.startDate <= asOf && u.actualStartDate !== undefined && u.actualStartDate <= asOf,
+  );
+
+  // N = 0: bewusst KEINE Observation — dieselbe Regel wie bei der Completed
+  // Delivery Duration Observation oben (kein erfundener Nullwert für eine nicht
+  // existente Verteilung).
+  if (started.length === 0) {
+    return undefined;
+  }
+
+  const queueDurations = started
+    .map((u) => daysBetween(u.startDate, u.actualStartDate))
+    .sort((a, b) => a - b);
+  const n = queueDurations.length;
+  const queueDurationDaysMedian =
+    n % 2 === 0 ? (queueDurations[n / 2 - 1]! + queueDurations[n / 2]!) / 2 : queueDurations[(n - 1) / 2]!;
+  const queueDurationDaysMin = queueDurations[0]!;
+  const queueDurationDaysMax = queueDurations[n - 1]!;
+
+  const populationQueuedAt = started.reduce(
+    (earliest, u) => (u.startDate < earliest ? u.startDate : earliest),
+    started[0]!.startDate,
+  );
+  const populationStartedAt = started.reduce(
+    (latest, u) => (u.actualStartDate > latest ? u.actualStartDate : latest),
+    started[0]!.actualStartDate,
+  );
+
+  const statement =
+    n === 1
+      ? `Zum ${asOf} liegt genau eine bis dahin bereits gestartete DeliveryUnit vor; die Wartezeit zwischen dem Entstehen der Lieferverpflichtung und dem tatsächlichen Start betrug ${queueDurationDaysMin} Tage. Noch nicht gestartete DeliveryUnits sind nicht enthalten.`
+      : `Bei den ${n} bis zum ${asOf} bereits gestarteten DeliveryUnits betrug die Wartezeit zwischen dem Entstehen der Lieferverpflichtung und dem tatsächlichen Start zwischen ${queueDurationDaysMin} und ${queueDurationDaysMax} Tagen; der Median lag bei ${queueDurationDaysMedian} Tagen. Noch nicht gestartete DeliveryUnits sind nicht enthalten.`;
+
+  return {
+    id: `operations-obs-queue-duration-${asOf}`,
+    kind: "operations-completed-queue-duration",
+    generatedAt: asOf,
+    area: "Delivery",
+    statement,
+    confidence: "unzureichend",
+    startedDeliveryUnitsTotal: n,
+    queueDurationDaysMedian,
+    queueDurationDaysMin,
+    queueDurationDaysMax,
+    populationQueuedAt,
+    populationStartedAt,
+    derivedFrom: started.map((u) => u.id),
+  };
+}

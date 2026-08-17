@@ -67,6 +67,17 @@ export type ObservationKind =
   // Struktur transportiert (siehe dort), nicht über das volle Observation-
   // Interface (keine erfundene severity/category).
   | "operations-completed-delivery-duration"
+  // Queue Duration Observation V1: additiv, keine neue Taxonomie. Erzeugt
+  // ausschließlich in observations/operations-observations.ts, aus bereits
+  // tatsächlich gestarteten DeliveryUnits (startDate/actualStartDate beide
+  // <= asOf) — eine exakt definierte historische Teilpopulation der Wartezeit
+  // zwischen Entstehen der Lieferverpflichtung und tatsächlichem Start. Kein
+  // Completion Event erforderlich (laufende und abgeschlossene Units zählen
+  // gleichermaßen, solange gestartet). Keine Aussage über noch wartende
+  // (eingereihte) Units, keine SLA-/Termintreue-/Überlastungsaussage. Wie die
+  // übrigen Operations-Kinds über eine separate Observation-Struktur
+  // transportiert (keine erfundene severity/category).
+  | "operations-completed-queue-duration"
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, keine neue
   // Taxonomie. Erzeugt ausschließlich in observations/marketing-observations.ts,
   // aus Lead-/Sales-Handoff-Fakten (dieselbe Quelle wie

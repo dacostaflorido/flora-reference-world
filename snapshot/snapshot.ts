@@ -4,8 +4,10 @@ import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-unit
 import {
   generateOperationsDeliveryFairShareObservation,
   generateOperationsCompletedDeliveryDurationObservation,
+  generateOperationsQueueDurationObservation,
   type OperationsObservation,
   type CompletedDeliveryDurationObservation,
+  type QueueDurationObservation,
 } from "../observations/operations-observations";
 import {
   generateMarketingDemandGenerationObservation,
@@ -99,6 +101,11 @@ export interface WorldSnapshot {
   // abgeschlossen ist (keine erfundene leere Verteilung, siehe
   // observations/operations-observations.ts).
   completedDeliveryDurationObservation: CompletedDeliveryDurationObservation | undefined;
+  // Queue Duration Observation V1: Wartezeit (Queue bis tatsächlicher Start) der
+  // bis zu asOf bereits gestarteten DeliveryUnits — ausschließlich aus den bereits
+  // asOf-gefilterten deliveryUnits abgeleitet (Backward Explainability) —
+  // undefined nur, wenn zu asOf noch keine DeliveryUnit tatsächlich gestartet ist.
+  queueDurationObservation: QueueDurationObservation | undefined;
   // Marketing-Demand-Generation-Fakt zu asOf, ausschließlich aus den bereits
   // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine Leads existieren.
@@ -154,6 +161,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const activeDeliveryUnits = activeDeliveryUnitsAt(deliveryUnits, asOf);
   const operationsObservation = generateOperationsDeliveryFairShareObservation(deliveryUnits, world.employees, asOf);
   const completedDeliveryDurationObservation = generateOperationsCompletedDeliveryDurationObservation(deliveryUnits, asOf);
+  const queueDurationObservation = generateOperationsQueueDurationObservation(deliveryUnits, asOf);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -226,6 +234,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     activeDeliveryUnits,
     operationsObservation,
     completedDeliveryDurationObservation,
+    queueDurationObservation,
     marketingObservation,
     marketingDemandSignal,
     customerAccounts,

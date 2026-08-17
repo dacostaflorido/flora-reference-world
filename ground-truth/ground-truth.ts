@@ -145,6 +145,11 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // Bewertungsgrundlage, keine Grundlage für primär/sekundär.
   "operations-completed-delivery-duration": "unterstuetzend",
 
+  // Queue Duration Observation V1: additiv, vom Compiler erzwungen (s. o.).
+  // "unterstuetzend" aus identischer Begründung wie die übrigen Operations-Kinds
+  // oben — ein rein deskriptiver historischer Fakt ohne jede Bewertungsgrundlage.
+  "operations-completed-queue-duration": "unterstuetzend",
+
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom Compiler
   // erzwungen (s. o.). "unterstuetzend" aus identischer Begründung wie Operations
   // oben — reines Volumen ohne im Domainmodell begründbare Schwelle, keine
@@ -206,6 +211,11 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // beide beschreiben denselben Sachverhalt (Delivery-Lifecycle), nur aus
   // unterschiedlichem Blickwinkel (aktuelle Last vs. abgeschlossene Dauer).
   "operations-completed-delivery-duration": "Delivery",
+  // Queue Duration Observation V1: additiv, vom Compiler erzwungen (s. o.).
+  // Dieselbe Gruppe "Delivery" wie die übrigen Operations-Kinds — beschreibt
+  // denselben Sachverhalt (Delivery-Lifecycle), nur die Queue-Phase statt der
+  // Delivery-Phase.
+  "operations-completed-queue-duration": "Delivery",
 
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom
   // Compiler erzwungen (s. o.). Eigene, neue Gruppe "Nachfrage" — keine der
