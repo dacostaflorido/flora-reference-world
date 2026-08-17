@@ -38,7 +38,12 @@ function realAreaSummaries(): CompanyAreaSummary[] {
 
   const operationsObservation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW);
   const operationsGroundTruth = generateGroundTruthSnapshot(operationsObservation ? [operationsObservation] : [], WORLD_NOW);
-  const operationsSummary = generateOperationsAreaSummary(operationsObservation, operationsGroundTruth);
+  // Completed Delivery Duration Observation V1 bewusst nicht verdrahtet: dieser
+  // Helfer prüft Company-weite Divergenzlogik, nicht die neue Observation selbst
+  // (dediziert getestet in validation/completed-delivery-duration.test.ts) —
+  // undefined hält das bestehende, bereits validierte Verhalten dieser Datei
+  // unverändert.
+  const operationsSummary = generateOperationsAreaSummary(operationsObservation, undefined, operationsGroundTruth);
 
   const marketingObservation = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW);
   const marketingDemandSignal = generateMarketingDemandRegimeSignalObservation(world.leads, WORLD_NOW, WORLD_TIMELINE_START);
@@ -406,7 +411,7 @@ describe("Backward Explainability (Phase 20)", () => {
   it("30. Operations: Company Summary → Operations Ground Truth → Operations Observation → DeliveryUnit → Opportunity", () => {
     const operationsObservation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW)!;
     const operationsGroundTruth = generateGroundTruthSnapshot([operationsObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(operationsObservation, operationsGroundTruth);
+    const summary = generateOperationsAreaSummary(operationsObservation, undefined, operationsGroundTruth);
 
     expect(operationsGroundTruth.activeObservationIds).toContain(operationsObservation.id);
     for (const id of summary.evidenceIds) {

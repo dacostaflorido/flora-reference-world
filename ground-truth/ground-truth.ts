@@ -138,6 +138,13 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // nicht auf GROUND_TRUTH_SNAPSHOTS/PEOPLE_GROUND_TRUTH_SNAPSHOTS aus.
   "operations-delivery-fair-share": "unterstuetzend",
 
+  // Completed Delivery Duration Observation V1: additiv, vom Compiler erzwungen
+  // (s. o.). "unterstuetzend" aus identischer Begründung wie
+  // "operations-delivery-fair-share" oben — ein rein deskriptiver historischer
+  // Fakt (tatsächliche Dauer bereits abgeschlossener DeliveryUnits) ohne jede
+  // Bewertungsgrundlage, keine Grundlage für primär/sekundär.
+  "operations-completed-delivery-duration": "unterstuetzend",
+
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom Compiler
   // erzwungen (s. o.). "unterstuetzend" aus identischer Begründung wie Operations
   // oben — reines Volumen ohne im Domainmodell begründbare Schwelle, keine
@@ -194,6 +201,11 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // Operations-Domäne: additiv, vom Compiler erzwungen (s. o.). Eigene, neue Gruppe
   // "Delivery" (freigegebene Vorgabe, Phase 10).
   "operations-delivery-fair-share": "Delivery",
+  // Completed Delivery Duration Observation V1: additiv, vom Compiler erzwungen
+  // (s. o.). Dieselbe Gruppe "Delivery" wie "operations-delivery-fair-share" —
+  // beide beschreiben denselben Sachverhalt (Delivery-Lifecycle), nur aus
+  // unterschiedlichem Blickwinkel (aktuelle Last vs. abgeschlossene Dauer).
+  "operations-completed-delivery-duration": "Delivery",
 
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom
   // Compiler erzwungen (s. o.). Eigene, neue Gruppe "Nachfrage" — keine der

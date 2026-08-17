@@ -406,11 +406,18 @@ describe("Regression (Operations-spezifisch — domänenübergreifende Regressio
     expect(byEmployee.get("emp-marc-oldenburg")).toBe(24);
   });
 
-  it("49. keine neue Observation eingeführt (nur die bestehende Fair-Share-Observation, unverändert im Typ)", () => {
+  // Ursprünglich ein Regressionswächter dafür, dass der Delivery-Commitment-Truth-
+  // Auftrag KEINE neue Observation einführt (damals korrekt). Der nachfolgende
+  // Completed-Delivery-Duration-Auftrag führt explizit genau eine neue, autorisierte
+  // Observation ein — der Wächter bleibt sinnvoll als Schutz gegen eine DRITTE,
+  // nicht autorisierte Observation, jetzt mit exakt zwei erwarteten Exports.
+  it("49. keine unautorisierte dritte Observation eingeführt (exakt Fair-Share + Completed Delivery Duration)", () => {
     const observationExports = Object.keys(OperationsObservationsModule).filter(
       (name) => name.startsWith("generate") && name.endsWith("Observation"),
     );
-    expect(observationExports).toEqual(["generateOperationsDeliveryFairShareObservation"]);
+    expect(observationExports.sort()).toEqual(
+      ["generateOperationsCompletedDeliveryDurationObservation", "generateOperationsDeliveryFairShareObservation"].sort(),
+    );
   });
 
   it("50. kein Handoff-Event eingeführt", () => {

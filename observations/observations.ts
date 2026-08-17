@@ -58,6 +58,15 @@ export type ObservationKind =
   // Union, damit Ground Truth (ground-truth.ts, ObservationLike) denselben
   // generischen Mechanismus (Priorität/Gruppierung nach kind) verwenden kann.
   | "operations-delivery-fair-share"
+  // Completed Delivery Duration Observation V1: additiv, keine neue Taxonomie.
+  // Erzeugt ausschließlich in observations/operations-observations.ts, aus bereits
+  // tatsächlich abgeschlossenen DeliveryUnits (actualStartDate/actualEndDate beide
+  // <= asOf) — eine exakt definierte historische Teilpopulation, keine Aussage über
+  // laufende oder eingereihte Units, keine Termintreue-/SLA-Aussage. Wie
+  // "operations-delivery-fair-share" über die separate OperationsObservation-
+  // Struktur transportiert (siehe dort), nicht über das volle Observation-
+  // Interface (keine erfundene severity/category).
+  | "operations-completed-delivery-duration"
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, keine neue
   // Taxonomie. Erzeugt ausschließlich in observations/marketing-observations.ts,
   // aus Lead-/Sales-Handoff-Fakten (dieselbe Quelle wie

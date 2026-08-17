@@ -283,7 +283,10 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
     // Real Delivery Lifecycle V1: "aktiv" bedeutet jetzt tatsächlich gestartet
     // (actualStartDate), nicht mehr bloß eingereiht — siehe
     // validation/operations-invariants.test.ts, "Baseline-Fakten bei WORLD_NOW..."
-    // für die vollständige Kausalkette.
+    // für die vollständige Kausalkette. Completed Delivery Duration Observation V1
+    // (Delivery Commitment Truth Auftrag): vier zusätzliche Schlüssel aus der neuen,
+    // additiven Observation — 57 bis WORLD_NOW abgeschlossene DeliveryUnits, Dauer
+    // 18-42 Tage, Median 33 (siehe validation/completed-delivery-duration.test.ts).
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
       activeDeliveryUnits: 15,
@@ -291,6 +294,10 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
       fairShare: 5,
       maxShare: 9 / 15,
       fairShareRatio: 1.8,
+      completedDeliveryUnitsTotal: 57,
+      durationDaysMedian: 33,
+      durationDaysMin: 18,
+      durationDaysMax: 42,
     });
   });
 

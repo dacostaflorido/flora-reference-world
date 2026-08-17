@@ -1,7 +1,12 @@
 import type { Employee } from "../world/employees";
 import type { EmployeeHired, EmployeeTerminated } from "../events/employee-lifecycle";
 import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
-import { generateOperationsDeliveryFairShareObservation, type OperationsObservation } from "../observations/operations-observations";
+import {
+  generateOperationsDeliveryFairShareObservation,
+  generateOperationsCompletedDeliveryDurationObservation,
+  type OperationsObservation,
+  type CompletedDeliveryDurationObservation,
+} from "../observations/operations-observations";
 import {
   generateMarketingDemandGenerationObservation,
   generateMarketingDemandRegimeSignalObservation,
@@ -87,6 +92,13 @@ export interface WorldSnapshot {
   // abgeleitet (Backward Explainability) — undefined nur, wenn zu asOf keine aktiven
   // Operations-Mitarbeiter existieren.
   operationsObservation: OperationsObservation | undefined;
+  // Completed Delivery Duration Observation V1: tatsächliche Dauer (Start bis
+  // Abschluss) der bis zu asOf bereits abgeschlossenen DeliveryUnits — ausschließlich
+  // aus den bereits asOf-gefilterten deliveryUnits abgeleitet (Backward
+  // Explainability) — undefined nur, wenn zu asOf noch keine DeliveryUnit
+  // abgeschlossen ist (keine erfundene leere Verteilung, siehe
+  // observations/operations-observations.ts).
+  completedDeliveryDurationObservation: CompletedDeliveryDurationObservation | undefined;
   // Marketing-Demand-Generation-Fakt zu asOf, ausschließlich aus den bereits
   // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine Leads existieren.
@@ -141,6 +153,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const deliveryUnits = world.deliveryUnits.filter((u) => u.startDate <= asOf);
   const activeDeliveryUnits = activeDeliveryUnitsAt(deliveryUnits, asOf);
   const operationsObservation = generateOperationsDeliveryFairShareObservation(deliveryUnits, world.employees, asOf);
+  const completedDeliveryDurationObservation = generateOperationsCompletedDeliveryDurationObservation(deliveryUnits, asOf);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -212,6 +225,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     deliveryUnits,
     activeDeliveryUnits,
     operationsObservation,
+    completedDeliveryDurationObservation,
     marketingObservation,
     marketingDemandSignal,
     customerAccounts,

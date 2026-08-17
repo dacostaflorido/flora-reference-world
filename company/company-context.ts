@@ -55,8 +55,15 @@ export function generateCompanyContextFromSnapshot(
   const peopleGroundTruth = generateGroundTruthSnapshot(peopleObservations, snapshot.asOf);
   const peopleBusinessState = generatePeopleBusinessStateSnapshot(peopleGroundTruth, peopleObservations);
 
+  // Delivery Commitment Truth + Completed Delivery Duration Observation V1: exakt
+  // dieselbe Herleitung wie Marketings zwei Observation-Kinds oben — beide
+  // Operations-Observations werden derselben generischen Ground Truth übergeben,
+  // kein neuer Mechanismus.
   const operationsGroundTruth = generateGroundTruthSnapshot(
-    snapshot.operationsObservation ? [snapshot.operationsObservation] : [],
+    [
+      ...(snapshot.operationsObservation ? [snapshot.operationsObservation] : []),
+      ...(snapshot.completedDeliveryDurationObservation ? [snapshot.completedDeliveryDurationObservation] : []),
+    ],
     snapshot.asOf,
   );
 
@@ -85,7 +92,7 @@ export function generateCompanyContextFromSnapshot(
     generateSalesAreaSummary(salesBusinessState, salesExecutiveContext, salesGroundTruth, salesObservations),
     generateMarketingAreaSummary(snapshot.marketingObservation, snapshot.marketingDemandSignal, marketingBusinessState, marketingGroundTruth),
     generatePeopleAreaSummary(peopleBusinessState, peopleGroundTruth, peopleObservations),
-    generateOperationsAreaSummary(snapshot.operationsObservation, operationsGroundTruth),
+    generateOperationsAreaSummary(snapshot.operationsObservation, snapshot.completedDeliveryDurationObservation, operationsGroundTruth),
   ];
 
   const businessState = generateCompanyBusinessStateSnapshot(areaSummaries, snapshot.asOf);

@@ -146,6 +146,9 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       "people-critical-role-last-person": "sekundaer",
       // Operations Foundation: additiv, s. GROUND_TRUTH_PRIORITIES in ground-truth.ts.
       "operations-delivery-fair-share": "unterstuetzend",
+      // Completed Delivery Duration Observation V1: additiv, s.
+      // GROUND_TRUTH_PRIORITIES in ground-truth.ts.
+      "operations-completed-delivery-duration": "unterstuetzend",
       // Marketing as First-Class Company Area: additiv, s. GROUND_TRUTH_PRIORITIES
       // in ground-truth.ts. world.observations (SCENARIO_WORLDS) enthält nie
       // Marketing-Kinds — nur für Record-Vollständigkeit erforderlich.
@@ -188,6 +191,9 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       "people-critical-role-last-person": "Team-Kontinuität",
       // Operations Foundation: additiv, s. OBSERVATION_GROUP_LABELS in ground-truth.ts.
       "operations-delivery-fair-share": "Delivery",
+      // Completed Delivery Duration Observation V1: additiv, s.
+      // OBSERVATION_GROUP_LABELS in ground-truth.ts.
+      "operations-completed-delivery-duration": "Delivery",
       // Marketing as First-Class Company Area: additiv, s. OBSERVATION_GROUP_LABELS
       // in ground-truth.ts.
       "marketing-demand-generation-volume": "Nachfrage",
