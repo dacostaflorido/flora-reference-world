@@ -397,7 +397,7 @@ describe("Integration", () => {
     const fairShare = generateOperationsDeliveryFairShareObservation(units, EMPLOYEES, WORLD_NOW);
     const completedDuration = generateOperationsCompletedDeliveryDurationObservation(units, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot([fairShare!, completedDuration!, baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(fairShare, completedDuration, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, completedDuration, baselineObservation, undefined, groundTruth);
     expect(summary.topObservations.length).toBe(3);
     expect(summary.topObservations.map((o) => o.id)).toContain(baselineObservation.id);
     // statement bleibt bewusst die Fair-Share-Aussage
@@ -406,7 +406,7 @@ describe("Integration", () => {
 
   it("44. relevante Metriken korrekt", () => {
     const groundTruth = generateGroundTruthSnapshot([baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(undefined, undefined, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(undefined, undefined, baselineObservation, undefined, groundTruth);
     expect(summary.relevantMetrics.startedDeliveryUnitsTotal).toBe(72);
     expect(summary.relevantMetrics.queueDurationDaysMedian).toBe(3);
     expect(summary.relevantMetrics.queueDurationDaysMin).toBe(0);
@@ -417,7 +417,7 @@ describe("Integration", () => {
     const fairShare = generateOperationsDeliveryFairShareObservation(units, EMPLOYEES, WORLD_NOW);
     const completedDuration = generateOperationsCompletedDeliveryDurationObservation(units, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot([fairShare!, completedDuration!, baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(fairShare, completedDuration, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, completedDuration, baselineObservation, undefined, groundTruth);
     const allKeys = Object.keys(summary.relevantMetrics);
     expect(new Set(allKeys).size).toBe(allKeys.length);
     for (const id of baselineObservation.derivedFrom) {
@@ -497,6 +497,7 @@ describe("Regression", () => {
         ...(snapshot.operationsObservation ? [snapshot.operationsObservation] : []),
         ...(snapshot.completedDeliveryDurationObservation ? [snapshot.completedDeliveryDurationObservation] : []),
         ...(snapshot.queueDurationObservation ? [snapshot.queueDurationObservation] : []),
+        snapshot.currentDeliveryQueueSnapshotObservation,
       ],
       WORLD_NOW,
     );
@@ -504,6 +505,7 @@ describe("Regression", () => {
       snapshot.operationsObservation,
       snapshot.completedDeliveryDurationObservation,
       snapshot.queueDurationObservation,
+      snapshot.currentDeliveryQueueSnapshotObservation,
       groundTruth,
     );
     expect(summary.state).toBeNull();

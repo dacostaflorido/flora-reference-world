@@ -8,6 +8,7 @@ import type {
   OperationsObservation,
   CompletedDeliveryDurationObservation,
   QueueDurationObservation,
+  CurrentDeliveryQueueSnapshotObservation,
 } from "../observations/operations-observations";
 import type { MarketingObservation, MarketingDemandSignalObservation } from "../observations/marketing-observations";
 import type { CompanyAreaObservationSummary, CompanyAreaSummary } from "./company-area";
@@ -86,29 +87,38 @@ export function generatePeopleAreaSummary(
 
 // OPERATIONS ---------------------------------------------------------------
 // Quellen: Operations Fair-Share-Observation, Completed Delivery Duration
-// Observation, Queue Duration Observation (Delivery-Commitment-Truth-Auftrag und
-// Nachfolgeaufträge), Operations Ground Truth. state bleibt zwingend null,
-// evaluationStatus zwingend "unzureichende-evidenz" — Operations besitzt keinen
-// Business State (Domain Decision 3) und keine der drei Observations verändert
-// das (alle rein deskriptiv, ohne Bewertungsgrundlage). statement bleibt bewusst
-// ausschließlich die Fair-Share-Aussage (unverändertes Verhalten, bestehender
-// Consumer Contract) — die beiden Dauer-Observations werden additiv über
+// Observation, Queue Duration Observation, Current Delivery Queue Snapshot
+// (Delivery-Commitment-Truth-Auftrag und Nachfolgeaufträge), Operations Ground
+// Truth. state bleibt zwingend null, evaluationStatus zwingend
+// "unzureichende-evidenz" — Operations besitzt keinen Business State (Domain
+// Decision 3) und keine der vier Observations verändert das (alle rein
+// deskriptiv, ohne Bewertungsgrundlage). statement bleibt bewusst ausschließlich
+// die Fair-Share-Aussage (unverändertes Verhalten, bestehender Consumer
+// Contract) — die übrigen drei Observations werden additiv über
 // topObservations exponiert, exakt demselben Muster wie Marketings zweite
 // Observation (generateMarketingAreaSummary oben: mehrere aktive Observations,
-// aber ein einzelnes, weiterhin eindeutiges statement-Feld). Beide Dauer-
+// aber ein einzelnes, weiterhin eindeutiges statement-Feld). Die beiden Dauer-
 // Observations sind optional: undefined, wenn zu diesem Zeitpunkt keine
-// DeliveryUnit bereits abgeschlossen bzw. gestartet ist — dann keine Teilnahme an
-// topObservations/relevantMetrics/evidenceIds, kein erfundener Ersatzinhalt.
+// DeliveryUnit bereits abgeschlossen bzw. gestartet ist. Current Delivery Queue
+// Snapshot ist dagegen NICHT optional (siehe operations-observations.ts) — sie
+// liefert immer ein definiertes Ergebnis, auch bei N=0 — nimmt aber trotzdem
+// nur dann an topObservations/relevantMetrics/evidenceIds teil, wenn sie in der
+// übergebenen Ground Truth als aktiv registriert ist (dieselbe generische
+// isActive-Prüfung wie bei den übrigen drei), kein erfundener Ersatzinhalt bei
+// den nicht-aktiven Observations.
 export function generateOperationsAreaSummary(
   observation: OperationsObservation | undefined,
   completedDeliveryDuration: CompletedDeliveryDurationObservation | undefined,
   queueDuration: QueueDurationObservation | undefined,
+  currentDeliveryQueueSnapshot: CurrentDeliveryQueueSnapshotObservation | undefined,
   groundTruth: GroundTruthSnapshot,
 ): CompanyAreaSummary {
   const isActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
   const isDurationActive =
     completedDeliveryDuration !== undefined && groundTruth.activeObservationIds.includes(completedDeliveryDuration.id);
   const isQueueDurationActive = queueDuration !== undefined && groundTruth.activeObservationIds.includes(queueDuration.id);
+  const isCurrentQueueActive =
+    currentDeliveryQueueSnapshot !== undefined && groundTruth.activeObservationIds.includes(currentDeliveryQueueSnapshot.id);
 
   const topObservations: CompanyAreaObservationSummary[] = [
     ...(isActive ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }] : []),
@@ -117,6 +127,9 @@ export function generateOperationsAreaSummary(
       : []),
     ...(isQueueDurationActive
       ? [{ id: queueDuration!.id, statement: queueDuration!.statement, confidence: queueDuration!.confidence }]
+      : []),
+    ...(isCurrentQueueActive
+      ? [{ id: currentDeliveryQueueSnapshot!.id, statement: currentDeliveryQueueSnapshot!.statement, confidence: currentDeliveryQueueSnapshot!.confidence }]
       : []),
   ];
 
@@ -146,10 +159,32 @@ export function generateOperationsAreaSummary(
           queueDurationDaysMax: queueDuration!.queueDurationDaysMax,
         }
       : {}),
+    ...(isCurrentQueueActive
+      ? {
+          evaluatedDeliveryCommitmentsTotal: currentDeliveryQueueSnapshot!.evaluatedDeliveryCommitmentsTotal,
+          waitingDeliveryUnitsTotal: currentDeliveryQueueSnapshot!.waitingDeliveryUnitsTotal,
+          // Altersfelder sind bei waitingDeliveryUnitsTotal=0 bewusst undefined
+          // (siehe operations-observations.ts) — relevantMetrics akzeptiert nur
+          // number|string, deshalb hier zusätzlich einzeln auf Definiertheit
+          // geprüft statt pauschal über isCurrentQueueActive.
+          ...(currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMedian !== undefined
+            ? { waitingQueueAgeDaysMedian: currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMedian }
+            : {}),
+          ...(currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMin !== undefined
+            ? { waitingQueueAgeDaysMin: currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMin }
+            : {}),
+          ...(currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMax !== undefined
+            ? { waitingQueueAgeDaysMax: currentDeliveryQueueSnapshot!.waitingQueueAgeDaysMax }
+            : {}),
+          ...(currentDeliveryQueueSnapshot!.oldestWaitingQueuedAt !== undefined
+            ? { oldestWaitingQueuedAt: currentDeliveryQueueSnapshot!.oldestWaitingQueuedAt }
+            : {}),
+        }
+      : {}),
   };
 
   // evidenceIds: Vereinigung aller aktiven Observation-Evidenzketten (dedupliziert,
-  // alle drei sind gleichrangige, unterstützende Evidenz — anders als bei Marketing
+  // alle vier sind gleichrangige, unterstützende Evidenz — anders als bei Marketing
   // gibt es hier keine Bewertungshierarchie/isEvaluated-Unterscheidung, die eine
   // Quelle gegenüber einer anderen bevorzugen müsste). isAreaAffected (company-
   // executive-context.ts) prüft für state=null-Areas ausschließlich
@@ -159,6 +194,7 @@ export function generateOperationsAreaSummary(
       ...(isActive ? observation!.derivedFrom : []),
       ...(isDurationActive ? completedDeliveryDuration!.derivedFrom : []),
       ...(isQueueDurationActive ? queueDuration!.derivedFrom : []),
+      ...(isCurrentQueueActive ? currentDeliveryQueueSnapshot!.derivedFrom : []),
     ]),
   ];
 

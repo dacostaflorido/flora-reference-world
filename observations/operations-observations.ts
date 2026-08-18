@@ -349,3 +349,105 @@ export function generateOperationsQueueDurationObservation(
     derivedFrom: started.map((u) => u.id),
   };
 }
+
+// Current Delivery Queue Snapshot V1: beantwortet ausschließlich, wie viele bis
+// zu asOf entstandene Lieferverpflichtungen zu asOf noch auf ihren tatsächlichen
+// Start warten, und wie lange sie bisher gewartet haben. Ein reiner
+// Stichtags-Snapshot — anders als die beiden Duration-Observations oben MUSS
+// diese Funktion immer ein definiertes Ergebnis liefern (nie undefined), auch bei
+// N=0: "bis zum Stichtag sind keine Lieferverpflichtungen entstanden" ist selbst
+// ein wahrer, informativer Fakt (keine erfundene Nullverteilung, exakt wie bei
+// der Fair-Share-Observation, die bei 0 aktiven Einheiten ebenfalls weiterhin
+// eine definierte Observation liefert — nicht wie die beiden Duration-
+// Observations, wo ein Nullwert eine nicht existente Verteilung vorgetäuscht
+// hätte). Drei klar unterscheidbare Fälle (siehe Auftrag "Current Delivery Queue
+// Snapshot V1", B5): A) N=0, B) N>0/W=0, C) N>0/W>0. Kind-Name
+// "operations-current-delivery-queue": "current" bezieht sich hier eindeutig auf
+// den asOf-Stichtag, nicht auf einen Trend — der gesamte Vertrag ist auf einen
+// einzelnen Zeitpunkt beschränkt, keine Persistenz, keine Vergleichsfenster.
+export interface CurrentDeliveryQueueSnapshotObservation {
+  id: string;
+  kind: ObservationKind;
+  generatedAt: string;
+  area: "Delivery";
+  statement: string;
+  confidence: Observation["confidence"];
+  evaluatedDeliveryCommitmentsTotal: number;
+  waitingDeliveryUnitsTotal: number;
+  waitingQueueAgeDaysMedian: number | undefined;
+  waitingQueueAgeDaysMin: number | undefined;
+  waitingQueueAgeDaysMax: number | undefined;
+  oldestWaitingQueuedAt: string | undefined;
+  waitingDeliveryUnitIds: string[];
+  derivedFrom: string[];
+}
+
+// Gesamtpopulation (N): startDate <= asOf — jede bis asOf entstandene
+// Lieferverpflichtung, unabhängig vom weiteren Status. Wartende Teilpopulation
+// (W) ⊆ N: actualStartDate === undefined ODER actualStartDate > asOf (ein
+// tatsächlicher Start, der erst NACH diesem asOf liegt, zählt zu diesem
+// historischen Stichtag als noch wartend — Future-Knowledge-Schutz: eine später
+// tatsächlich gestartete Unit bleibt in einem früheren Snapshot wartend, exakt
+// wie im Auftrag verlangt). derivedFrom referenziert IMMER die VOLLSTÄNDIGE
+// Population N (nicht nur die wartende Treffermenge W) — Begründung: die
+// Observation trifft eine "W von N"-Aussage, beide Zahlen müssen rückverfolgbar
+// sein, sonst wäre bei W=0 die Aussage "N geprüft, keine wartet" nicht von "0
+// geprüft" unterscheidbar (derselbe Explainability-Grundsatz wie beim
+// Zero-Active-Explainability-Fix der Fair-Share-Observation).
+// waitingDeliveryUnitIds ⊆ derivedFrom referenziert zusätzlich exakt die wartende
+// Teilmenge. Queue-Alter = daysBetween(startDate, asOf) — die bisherige
+// Wartezeit BIS asOf, keine finale Dauer, keine Prognose (ein zukünftiger Start
+// verändert dieses Alter für einen bereits berechneten historischen asOf nicht).
+export function generateOperationsCurrentDeliveryQueueSnapshotObservation(
+  deliveryUnits: readonly DeliveryUnit[],
+  asOf: string,
+): CurrentDeliveryQueueSnapshotObservation {
+  const evaluated = deliveryUnits.filter((u) => u.startDate <= asOf);
+  const waiting = evaluated.filter((u) => u.actualStartDate === undefined || u.actualStartDate > asOf);
+
+  const n = evaluated.length;
+  const w = waiting.length;
+
+  let waitingQueueAgeDaysMedian: number | undefined;
+  let waitingQueueAgeDaysMin: number | undefined;
+  let waitingQueueAgeDaysMax: number | undefined;
+  let oldestWaitingQueuedAt: string | undefined;
+
+  if (w > 0) {
+    const ages = waiting.map((u) => daysBetween(u.startDate, asOf)).sort((a, b) => a - b);
+    waitingQueueAgeDaysMin = ages[0]!;
+    waitingQueueAgeDaysMax = ages[ages.length - 1]!;
+    waitingQueueAgeDaysMedian =
+      ages.length % 2 === 0 ? (ages[ages.length / 2 - 1]! + ages[ages.length / 2]!) / 2 : ages[(ages.length - 1) / 2]!;
+    oldestWaitingQueuedAt = waiting.reduce(
+      (earliest, u) => (u.startDate < earliest ? u.startDate : earliest),
+      waiting[0]!.startDate,
+    );
+  }
+
+  const statement =
+    n === 0
+      ? `Bis zum ${asOf} waren keine Lieferverpflichtungen entstanden.`
+      : w === 0
+        ? `Von den ${n} bis zum ${asOf} entstandenen Lieferverpflichtungen wartete zu diesem Zeitpunkt keine mehr auf den tatsächlichen Start.`
+        : w === 1
+          ? `Von den ${n} bis zum ${asOf} entstandenen Lieferverpflichtungen wartete zu diesem Stichtag genau eine noch auf den tatsächlichen Start; ihre bisherige Wartezeit betrug ${waitingQueueAgeDaysMin} Tage.`
+          : `Von den ${n} bis zum ${asOf} entstandenen Lieferverpflichtungen warteten ${w} zu diesem Stichtag noch auf den tatsächlichen Start. Ihre bisherige Wartezeit lag zwischen ${waitingQueueAgeDaysMin} und ${waitingQueueAgeDaysMax} Tagen; der Median lag bei ${waitingQueueAgeDaysMedian} Tagen.`;
+
+  return {
+    id: `operations-obs-current-delivery-queue-${asOf}`,
+    kind: "operations-current-delivery-queue",
+    generatedAt: asOf,
+    area: "Delivery",
+    statement,
+    confidence: "unzureichend",
+    evaluatedDeliveryCommitmentsTotal: n,
+    waitingDeliveryUnitsTotal: w,
+    waitingQueueAgeDaysMedian,
+    waitingQueueAgeDaysMin,
+    waitingQueueAgeDaysMax,
+    oldestWaitingQueuedAt,
+    waitingDeliveryUnitIds: waiting.map((u) => u.id),
+    derivedFrom: evaluated.map((u) => u.id),
+  };
+}

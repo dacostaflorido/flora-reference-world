@@ -5,9 +5,11 @@ import {
   generateOperationsDeliveryFairShareObservation,
   generateOperationsCompletedDeliveryDurationObservation,
   generateOperationsQueueDurationObservation,
+  generateOperationsCurrentDeliveryQueueSnapshotObservation,
   type OperationsObservation,
   type CompletedDeliveryDurationObservation,
   type QueueDurationObservation,
+  type CurrentDeliveryQueueSnapshotObservation,
 } from "../observations/operations-observations";
 import {
   generateMarketingDemandGenerationObservation,
@@ -106,6 +108,13 @@ export interface WorldSnapshot {
   // asOf-gefilterten deliveryUnits abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine DeliveryUnit tatsächlich gestartet ist.
   queueDurationObservation: QueueDurationObservation | undefined;
+  // Current Delivery Queue Snapshot V1: reiner Stichtags-Snapshot, wie viele bis
+  // asOf entstandene Lieferverpflichtungen zu asOf noch auf ihren tatsächlichen
+  // Start warten. Anders als die übrigen Operations-Observation-Felder NICHT
+  // optional — die Funktion liefert immer ein definiertes Ergebnis, auch bei 0
+  // entstandenen Lieferverpflichtungen (ein wahrer, informativer Fakt, siehe
+  // observations/operations-observations.ts).
+  currentDeliveryQueueSnapshotObservation: CurrentDeliveryQueueSnapshotObservation;
   // Marketing-Demand-Generation-Fakt zu asOf, ausschließlich aus den bereits
   // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine Leads existieren.
@@ -162,6 +171,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const operationsObservation = generateOperationsDeliveryFairShareObservation(deliveryUnits, world.employees, asOf);
   const completedDeliveryDurationObservation = generateOperationsCompletedDeliveryDurationObservation(deliveryUnits, asOf);
   const queueDurationObservation = generateOperationsQueueDurationObservation(deliveryUnits, asOf);
+  const currentDeliveryQueueSnapshotObservation = generateOperationsCurrentDeliveryQueueSnapshotObservation(deliveryUnits, asOf);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -235,6 +245,7 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     operationsObservation,
     completedDeliveryDurationObservation,
     queueDurationObservation,
+    currentDeliveryQueueSnapshotObservation,
     marketingObservation,
     marketingDemandSignal,
     customerAccounts,

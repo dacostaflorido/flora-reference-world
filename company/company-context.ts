@@ -56,14 +56,18 @@ export function generateCompanyContextFromSnapshot(
   const peopleBusinessState = generatePeopleBusinessStateSnapshot(peopleGroundTruth, peopleObservations);
 
   // Delivery Commitment Truth + Completed Delivery Duration Observation V1 +
-  // Queue Duration Observation V1: exakt dieselbe Herleitung wie Marketings zwei
-  // Observation-Kinds oben — alle drei Operations-Observations werden derselben
-  // generischen Ground Truth übergeben, kein neuer Mechanismus.
+  // Queue Duration Observation V1 + Current Delivery Queue Snapshot V1: exakt
+  // dieselbe Herleitung wie Marketings zwei Observation-Kinds oben — alle vier
+  // Operations-Observations werden derselben generischen Ground Truth übergeben,
+  // kein neuer Mechanismus. currentDeliveryQueueSnapshotObservation ist im
+  // Snapshot nicht optional (siehe snapshot.ts), daher hier ohne bedingten
+  // Spread direkt in das Array aufgenommen.
   const operationsGroundTruth = generateGroundTruthSnapshot(
     [
       ...(snapshot.operationsObservation ? [snapshot.operationsObservation] : []),
       ...(snapshot.completedDeliveryDurationObservation ? [snapshot.completedDeliveryDurationObservation] : []),
       ...(snapshot.queueDurationObservation ? [snapshot.queueDurationObservation] : []),
+      snapshot.currentDeliveryQueueSnapshotObservation,
     ],
     snapshot.asOf,
   );
@@ -97,6 +101,7 @@ export function generateCompanyContextFromSnapshot(
       snapshot.operationsObservation,
       snapshot.completedDeliveryDurationObservation,
       snapshot.queueDurationObservation,
+      snapshot.currentDeliveryQueueSnapshotObservation,
       operationsGroundTruth,
     ),
   ];

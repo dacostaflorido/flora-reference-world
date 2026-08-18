@@ -78,6 +78,17 @@ export type ObservationKind =
   // übrigen Operations-Kinds über eine separate Observation-Struktur
   // transportiert (keine erfundene severity/category).
   | "operations-completed-queue-duration"
+  // Current Delivery Queue Snapshot V1: additiv, keine neue Taxonomie. Erzeugt
+  // ausschließlich in observations/operations-observations.ts — ein reiner
+  // Stichtags-Snapshot, wie viele bis asOf entstandene Lieferverpflichtungen zu
+  // asOf noch auf ihren tatsächlichen Start warten und wie lange bisher. Anders
+  // als die beiden Duration-Kinds oben: immer eine definierte Observation, auch
+  // bei 0 entstandenen Lieferverpflichtungen (ein wahrer, informativer Fakt,
+  // keine erfundene Nullverteilung). Kein Trend, keine Persistenz, kein
+  // Vergleichsfenster, keine SLA-/Termintreue-/Überlastungsaussage. Wie die
+  // übrigen Operations-Kinds über eine separate Observation-Struktur
+  // transportiert (keine erfundene severity/category).
+  | "operations-current-delivery-queue"
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, keine neue
   // Taxonomie. Erzeugt ausschließlich in observations/marketing-observations.ts,
   // aus Lead-/Sales-Handoff-Fakten (dieselbe Quelle wie

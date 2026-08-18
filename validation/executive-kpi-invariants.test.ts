@@ -289,7 +289,11 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
     // validation/completed-delivery-duration.test.ts). Queue Duration Observation
     // V1: weitere vier Schlüssel — 72 bis WORLD_NOW bereits gestartete
     // DeliveryUnits, Wartezeit 0-8 Tage, Median 3 (siehe
-    // validation/queue-duration.test.ts).
+    // validation/queue-duration.test.ts). Current Delivery Queue Snapshot V1:
+    // weitere sechs Schlüssel — 79 bis WORLD_NOW entstandene
+    // Lieferverpflichtungen, davon 7 wartend, Wartezeit-Alter 1-3 Tage, Median 2,
+    // ältester Queue-Zeitpunkt 2025-08-29 (siehe
+    // validation/current-delivery-queue-snapshot.test.ts).
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
       activeDeliveryUnits: 15,
@@ -305,6 +309,12 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
       queueDurationDaysMedian: 3,
       queueDurationDaysMin: 0,
       queueDurationDaysMax: 8,
+      evaluatedDeliveryCommitmentsTotal: 79,
+      waitingDeliveryUnitsTotal: 7,
+      waitingQueueAgeDaysMedian: 2,
+      waitingQueueAgeDaysMin: 1,
+      waitingQueueAgeDaysMax: 3,
+      oldestWaitingQueuedAt: "2025-08-29",
     });
   });
 
