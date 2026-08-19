@@ -4,6 +4,13 @@ import { WORLD_NOW } from "../timeline/world-clock";
 import type { Employee } from "./employees";
 import type { Opportunity } from "../events/opportunities";
 import type { OperationsScenarioConfig } from "../engine/scenario-profiles";
+import {
+  NO_OPERATIONS_REGIMES,
+  queueRegimeAt,
+  deliveryRegimeAt,
+  validateOperationsLifecycleModel,
+  type OperationsLifecycleModel,
+} from "../engine/operations-lifecycle";
 
 // Operations = Customer Onboarding / Implementation / Delivery nach gewonnenem Deal
 // (freigegebene Domain Decision, Reference World v2 / Operations Foundation). Jede
@@ -124,21 +131,37 @@ function opportunityNumericKey(opportunityId: string): number {
   return parseInt(match[1]!, 10);
 }
 
+// Operations Regime Foundation (Auftrag "Current Queue Checkpoint + Operations
+// Regime Foundation", Phase B): lifecycleModel ersetzt bei Bedarf die
+// Baseline-Ziehungsgrenzen je Dimension, ohne die Ziehungsreihenfolge oder
+// -anzahl zu verändern (siehe engine/operations-lifecycle.ts für die
+// vollständige Begründung, warum kein Rejection Sampling verwendet wird). Das
+// Queue-Regime wird am Queue-/Commitment-Zeitpunkt (queuedAt) ausgewählt, das
+// Delivery-Regime am bereits berechneten tatsächlichen Start (actualStartDate)
+// — niemals an einem später liegenden Completion-Zeitpunkt (Auftrag B4.2:
+// "Regime anhand des späteren Completion-Zeitpunkts wählen" ist nicht
+// zulässig). Ohne konfiguriertes Regime (NO_OPERATIONS_REGIMES) liefert dies
+// bit-identisch dieselben zwei Ziehungen wie vor diesem Auftrag.
 function sampleDeliveryLifecycle(
   lifecycleRng: Rng,
   queuedAt: string,
+  lifecycleModel: OperationsLifecycleModel,
 ): { actualStartDate: string; actualEndDateRaw: string } {
   // Feste Ziehungsreihenfolge (Queue-Verzögerung zuerst, dann Lieferdauer) —
   // deterministisch, entity-lokal, beeinflusst keinen anderen Teilstrom. Beide
   // Werte sind reale, tatsächliche Zeiten — keiner davon wird gegen eine Planzusage
   // berechnet, weil keine existiert.
-  const queueDelayDays =
-    Math.floor(lifecycleRng() * (QUEUE_DELAY_MAX_DAYS - QUEUE_DELAY_MIN_DAYS + 1)) + QUEUE_DELAY_MIN_DAYS;
-  const deliveryDurationDays =
-    Math.floor(lifecycleRng() * (ACTUAL_DELIVERY_DURATION_MAX_DAYS - ACTUAL_DELIVERY_DURATION_MIN_DAYS + 1)) +
-    ACTUAL_DELIVERY_DURATION_MIN_DAYS;
-
+  const queueRegime = queueRegimeAt(lifecycleModel, queuedAt);
+  const queueDelayMin = queueRegime?.minDays ?? QUEUE_DELAY_MIN_DAYS;
+  const queueDelayMax = queueRegime?.maxDays ?? QUEUE_DELAY_MAX_DAYS;
+  const queueDelayDays = Math.floor(lifecycleRng() * (queueDelayMax - queueDelayMin + 1)) + queueDelayMin;
   const actualStartDate = addDays(queuedAt, queueDelayDays);
+
+  const deliveryRegime = deliveryRegimeAt(lifecycleModel, actualStartDate);
+  const deliveryDurationMin = deliveryRegime?.minDays ?? ACTUAL_DELIVERY_DURATION_MIN_DAYS;
+  const deliveryDurationMax = deliveryRegime?.maxDays ?? ACTUAL_DELIVERY_DURATION_MAX_DAYS;
+  const deliveryDurationDays =
+    Math.floor(lifecycleRng() * (deliveryDurationMax - deliveryDurationMin + 1)) + deliveryDurationMin;
   const actualEndDateRaw = addDays(actualStartDate, deliveryDurationDays);
 
   return { actualStartDate, actualEndDateRaw };
@@ -155,7 +178,14 @@ export function generateDeliveryUnits(
   opportunities: readonly Opportunity[],
   employees: readonly Employee[],
   config: OperationsScenarioConfig = DEFAULT_OPERATIONS_SCENARIO_CONFIG,
+  // Operations Regime Foundation, Phase B: bewusst NICHT Teil von
+  // OperationsScenarioConfig/ScenarioProfile (Architekturoption B, siehe
+  // Abschlussbericht) — ScenarioProfile und alle sechs bestehenden Profile
+  // bleiben dadurch textuell unverändert. Ohne Angabe identisch zum Verhalten
+  // vor diesem Auftrag (Default-Bit-Identität, Auftrag B8).
+  lifecycleModel: OperationsLifecycleModel = NO_OPERATIONS_REGIMES,
 ): DeliveryUnit[] {
+  validateOperationsLifecycleModel(lifecycleModel);
   const rng = createRng(seed);
   const operationsEmployees = employees.filter(isActiveOperationsEmployee);
   const load = new Map<string, number>();
@@ -189,7 +219,7 @@ export function generateDeliveryUnits(
 
     const startDate = opportunity.closedAt;
     const lifecycleRng = createRng(seed + DELIVERY_LIFECYCLE_SEED_OFFSET + opportunityNumericKey(opportunity.id));
-    const { actualStartDate, actualEndDateRaw } = sampleDeliveryLifecycle(lifecycleRng, startDate);
+    const { actualStartDate, actualEndDateRaw } = sampleDeliveryLifecycle(lifecycleRng, startDate, lifecycleModel);
 
     // Future-Knowledge-Schutz (unverändertes Muster wie zuvor bei actualEndDate):
     // ein deterministisch berechneter, aber noch in der Zukunft liegender

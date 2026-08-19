@@ -16,6 +16,7 @@ import type { MeetingTranscript } from "../events/meeting-transcripts";
 import type { CrmActivity } from "../events/crm-activities";
 import { generateKnowledgeObjects, type KnowledgeObject } from "../world/knowledge-objects";
 import { generateDeliveryUnits, type DeliveryUnit } from "../world/delivery-units";
+import { NO_OPERATIONS_REGIMES, type OperationsLifecycleModel } from "./operations-lifecycle";
 import {
   generateDeliveryQueuedEvents,
   generateDeliveryStartedEvents,
@@ -105,7 +106,19 @@ const SEED_STEP = {
   deliveryUnits: 7,
 } as const;
 
-export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfile = BASELINE_PROFILE): ScenarioWorld {
+// operationsLifecycleModel (Operations Regime Foundation, Phase B): bewusst ein
+// eigenständiger, zusätzlicher Parameter — NICHT Teil von ScenarioProfile
+// (Architekturoption B, siehe Abschlussbericht "Current Queue Checkpoint +
+// Operations Regime Foundation"). Ohne Angabe (Default NO_OPERATIONS_REGIMES)
+// identisch zum Verhalten vor diesem Auftrag; alle sechs ScenarioProfile-
+// Literale in scenario-profiles.ts bleiben dadurch textuell unverändert. Für
+// paired-world-Tests explizit konfigurierbar (siehe
+// validation/operations-lifecycle-regime.test.ts).
+export function generateScenarioWorld(
+  worldSeed: number,
+  profile: ScenarioProfile = BASELINE_PROFILE,
+  operationsLifecycleModel: OperationsLifecycleModel = NO_OPERATIONS_REGIMES,
+): ScenarioWorld {
   const offset = scenarioSeedOffset(profile);
 
   // --- Events (World → Events, Prinzip 6) ---------------------------------------
@@ -159,6 +172,7 @@ export function generateScenarioWorld(worldSeed: number, profile: ScenarioProfil
     opportunities,
     EMPLOYEES,
     profile.operations,
+    operationsLifecycleModel,
   );
 
   // Delivery Commitment Truth + Event Source of Truth (Phase 4.3): wörtliche
