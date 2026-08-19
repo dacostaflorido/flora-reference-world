@@ -6,9 +6,13 @@ import {
   generateOperationsCompletedDeliveryDurationObservation,
   generateOperationsQueueDurationObservation,
   generateOperationsCurrentDeliveryQueueSnapshotObservation,
+  generateOperationsQueueDurationSignalObservation,
+  generateOperationsDeliveryDurationSignalObservation,
   type OperationsObservation,
   type CompletedDeliveryDurationObservation,
   type QueueDurationObservation,
+  type QueueDurationSignalObservation,
+  type DeliveryDurationSignalObservation,
   type CurrentDeliveryQueueSnapshotObservation,
 } from "../observations/operations-observations";
 import {
@@ -115,6 +119,15 @@ export interface WorldSnapshot {
   // entstandenen Lieferverpflichtungen (ein wahrer, informativer Fakt, siehe
   // observations/operations-observations.ts).
   currentDeliveryQueueSnapshotObservation: CurrentDeliveryQueueSnapshotObservation;
+  // Queue/Delivery Duration Signal Observation (Auftrag "Operations Delivery
+  // Flow Signal Design"): zensierungskorrekte, persistente Richtungsaussage
+  // (Kaplan-Meier/RMST über zwei bestätigende Zeitfenster gegen eine
+  // historische Referenz) — ausschließlich aus den bereits asOf-gefilterten
+  // deliveryUnits abgeleitet (Backward Explainability). undefined, solange
+  // nicht genug historische Evidenz für eine belastbare Referenz vorliegt
+  // (dieselbe Mindest-Evidenz-Logik wie marketingDemandSignal).
+  queueDurationSignalObservation: QueueDurationSignalObservation | undefined;
+  deliveryDurationSignalObservation: DeliveryDurationSignalObservation | undefined;
   // Marketing-Demand-Generation-Fakt zu asOf, ausschließlich aus den bereits
   // asOf-gefilterten leads/opportunities abgeleitet (Backward Explainability) —
   // undefined nur, wenn zu asOf noch keine Leads existieren.
@@ -172,6 +185,8 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const completedDeliveryDurationObservation = generateOperationsCompletedDeliveryDurationObservation(deliveryUnits, asOf);
   const queueDurationObservation = generateOperationsQueueDurationObservation(deliveryUnits, asOf);
   const currentDeliveryQueueSnapshotObservation = generateOperationsCurrentDeliveryQueueSnapshotObservation(deliveryUnits, asOf);
+  const queueDurationSignalObservation = generateOperationsQueueDurationSignalObservation(deliveryUnits, asOf, WORLD_TIMELINE_START);
+  const deliveryDurationSignalObservation = generateOperationsDeliveryDurationSignalObservation(deliveryUnits, asOf, WORLD_TIMELINE_START);
   const customerAccounts = world.customerAccounts.filter((a) => a.createdAt <= asOf);
   const contacts = world.contacts.filter((c) => c.createdAt <= asOf);
 
@@ -246,6 +261,8 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     completedDeliveryDurationObservation,
     queueDurationObservation,
     currentDeliveryQueueSnapshotObservation,
+    queueDurationSignalObservation,
+    deliveryDurationSignalObservation,
     marketingObservation,
     marketingDemandSignal,
     customerAccounts,

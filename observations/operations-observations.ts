@@ -1,7 +1,8 @@
 import type { Observation, ObservationKind } from "./observations";
 import { activeDeliveryUnitsAt, type DeliveryUnit } from "../world/delivery-units";
 import type { Employee } from "../world/employees";
-import { daysBetween } from "../engine/random";
+import { addDays, daysBetween } from "../engine/random";
+import { restrictedMeanSurvivalTime, censoredCount, type SurvivalCase } from "../engine/survival-analysis";
 
 // Bewusst KEIN Import von engine/generator.ts (SCENARIO_WORLDS) hier: generator.ts
 // importiert bereits generateGroundTruthSnapshot aus ground-truth.ts, und
@@ -449,5 +450,363 @@ export function generateOperationsCurrentDeliveryQueueSnapshotObservation(
     oldestWaitingQueuedAt,
     waitingDeliveryUnitIds: waiting.map((u) => u.id),
     derivedFrom: evaluated.map((u) => u.id),
+  };
+}
+
+// ============================================================================
+// Queue/Delivery Duration Signal Observations (Auftrag "Operations Delivery
+// Flow Signal Design — Censor-Aware, Persistent, Sales-Decoupled")
+// ============================================================================
+//
+// Beantworten je EINE, eng begrenzte Führungsfrage: "Verändert sich die
+// jeweilige tatsächliche Dauer gerade anhaltend gegenüber ihrem historischen
+// Referenzniveau — länger, kürzer, oder gar nicht?" Exakt dasselbe
+// Frageformat wie MarketingDemandRegimeSignal
+// (observations/marketing-observations.ts), hier auf rechtszensierte
+// Dauerdaten angewendet statt auf reine Volumendichte.
+//
+// Methodik (siehe Abschlussbericht "Operations Delivery Flow Signal Design",
+// Phase 3/4 für den vollständigen Methodenaudit): Kaplan-Meier/Restricted-Mean-
+// Survival-Time (engine/survival-analysis.ts) statt Complete-Case oder
+// Maturity-Buffer. Noch wartende Queue-Fälle bzw. noch laufende Delivery-Units
+// werden NICHT aus der Population entfernt — sie zählen als rechtszensierte
+// Fälle mit ihrem bisherigen Alter (asOf - Ankerdatum), nicht als fehlendes
+// Ereignis. Ein einfacher Median/Mittelwert über nur bereits abgeschlossene
+// Fälle würde systematisch gerade die potenziell längsten, noch laufenden
+// Fälle ausschließen (Right-Censoring-Bias) — siehe Complete-Case-Vergleich im
+// Abschlussbericht.
+//
+// Fenster-/Persistence-Design (Phase 6/7, empirisch hergeleitet, nicht von
+// Marketings 28/56-Tage-Fenstern blind übernommen, siehe Abschlussbericht
+// Phase 5/6/9 für die vollständige Messreihe über 6 Seeds):
+// - zwei nicht überlappende, je 28-tägige "bestätigende" Kohorten-Fenster
+//   (Einreihungs- bzw. Start-Zeitpunkt der Unit im jeweiligen Fenster) —
+//   beide müssen unabhängig dieselbe Richtung zeigen (Kandidat C aus dem
+//   Fensterdesign-Audit).
+// - eine unbeschränkte historische Referenz (alles vor den beiden Fenstern,
+//   ab timelineStart) — dieselbe Konvention wie
+//   generateMarketingDemandRegimeSignalObservation.
+// - RMST-Horizont: 14 Tage für Queue (baseline liegt vollständig 0-8 Tage,
+//   14 Tage bereits deutlich darüber, aber nicht so groß, dass ein
+//   Backlog-Alter die Baseline-Referenz selbst unnötig aufbläht — siehe
+//   Abschlussbericht Phase 5), 42 Tage für Delivery (Baseline-Maximaldauer,
+//   der Horizont ist AUSDRÜCKLICH keine SLA und keine Zusage, ausschließlich
+//   die statistische Integrationsgrenze für RMST, siehe
+//   engine/survival-analysis.ts).
+// - ASYMMETRISCHE Schwellen: "verlaengerte-dauer" ab +25% über der Referenz,
+//   "verkuerzte-dauer" erst ab -50% unter der Referenz. Nicht symmetrisch
+//   gewählt (Auftrag, Phase 9: "Die Fähigkeit, Verschlechterungen zuverlässig
+//   zu erkennen, hat Vorrang vor einer symmetrischen Taxonomie") — eine
+//   symmetrische 25%-Schwelle für beide Richtungen erzeugte im Kalibrierungs-
+//   Audit einen dokumentierten Fehlerfall: eine kürzlich beendete Elevated-
+//   Phase kontaminiert die unbeschränkte historische Referenz teilweise (sie
+//   liegt noch teilweise IN der Referenzperiode), wodurch ein völlig normales,
+//   bereits wieder auf Baseline zurückgekehrtes aktuelles Fenster fälschlich
+//   als "verkuerzte-dauer" erschiene (relativ zur künstlich erhöhten
+//   Referenz). Eine strengere Verkürzungs-Schwelle (-50% statt -25%) verhindert
+//   dieses falsche Richtungssignal zuverlässig, ohne echte Reduced-Regime-
+//   Erkennung zu verlieren (im Kalibrierungs-Audit weiterhin in 5/6 bzw. 4/6
+//   Seeds korrekt erkannt — echte Reduced-Regime liegen 85-90 % unter der
+//   Referenz, weit jenseits der 50%-Schwelle).
+//
+// Mindest-Evidenz (Phase 8): je Fenster mindestens 5 Units, Referenz
+// mindestens 20 Units UND mindestens 90 Tage Historie (dieselbe
+// Mindestlaufzeit-Konvention wie Marketing) — unterhalb dieser Schwelle liefert
+// die Funktion `undefined` ("unzureichende-evidenz" auf Company-Area-Ebene,
+// exakt wie bei den beiden bestehenden Duration-Observations oben), statt einen
+// Wert auf dünner Evidenz zu erzwingen.
+const SIGNAL_WINDOW_DAYS = 28;
+const QUEUE_SIGNAL_HORIZON_DAYS = 14;
+const DELIVERY_SIGNAL_HORIZON_DAYS = 42;
+const SIGNAL_MIN_WINDOW_POPULATION = 5;
+const SIGNAL_MIN_REFERENCE_POPULATION = 20;
+const SIGNAL_MIN_REFERENCE_DAYS = 90;
+const SIGNAL_ELEVATED_THRESHOLD_FRAC = 0.25;
+const SIGNAL_REDUCED_THRESHOLD_FRAC = 0.5;
+
+export type OperationsDurationSignalValue = "unzureichende-evidenz" | "stabil" | "verlaengerte-dauer" | "verkuerzte-dauer";
+
+export interface DurationSignalWindow {
+  startsAt: string;
+  endsAt: string;
+  populationSize: number;
+  censoredCount: number;
+  rmstDays: number;
+}
+
+interface DurationCohort {
+  cases: SurvivalCase[];
+  unitIds: string[];
+}
+
+// Queue-Kohorte: Anker ist queuedAt (== DeliveryUnit.startDate, Auftrag B4.1).
+// Ereignis = tatsächlicher Start (actualStartDate <= asOf); Zensierung = noch
+// kein Start bis asOf, mit dem bisherigen Alter (asOf - startDate).
+function queueCohort(
+  units: readonly DeliveryUnit[],
+  cohortStartExclusive: string,
+  cohortEndInclusive: string,
+  asOf: string,
+): DurationCohort {
+  const matched = units.filter((u) => u.startDate > cohortStartExclusive && u.startDate <= cohortEndInclusive);
+  const cases: SurvivalCase[] = matched.map((u) =>
+    u.actualStartDate !== undefined && u.actualStartDate <= asOf
+      ? { durationDays: daysBetween(u.startDate, u.actualStartDate), censored: false }
+      : { durationDays: daysBetween(u.startDate, asOf), censored: true },
+  );
+  return { cases, unitIds: matched.map((u) => u.id) };
+}
+
+// Delivery-Kohorte: Anker ist der tatsächliche Start (actualStartDate, Auftrag
+// B4.2) — niemals der Queue-/Commitment-Zeitpunkt. Ereignis = tatsächlicher
+// Abschluss (actualEndDate <= asOf); Zensierung = noch kein Abschluss bis asOf,
+// mit dem bisherigen Alter (asOf - actualStartDate).
+function deliveryCohort(
+  units: readonly DeliveryUnit[],
+  cohortStartExclusive: string,
+  cohortEndInclusive: string,
+  asOf: string,
+): DurationCohort {
+  const matched = units.filter(
+    (u): u is DeliveryUnit & { actualStartDate: string } =>
+      u.actualStartDate !== undefined && u.actualStartDate > cohortStartExclusive && u.actualStartDate <= cohortEndInclusive,
+  );
+  const cases: SurvivalCase[] = matched.map((u) =>
+    u.actualEndDate !== undefined && u.actualEndDate <= asOf
+      ? { durationDays: daysBetween(u.actualStartDate, u.actualEndDate), censored: false }
+      : { durationDays: daysBetween(u.actualStartDate, asOf), censored: true },
+  );
+  return { cases, unitIds: matched.map((u) => u.id) };
+}
+
+function buildSignalWindow(cohort: DurationCohort, startsAt: string, endsAt: string, horizonDays: number): DurationSignalWindow {
+  return {
+    startsAt,
+    endsAt,
+    populationSize: cohort.cases.length,
+    censoredCount: censoredCount(cohort.cases),
+    rmstDays: restrictedMeanSurvivalTime(cohort.cases, horizonDays),
+  };
+}
+
+interface DurationSignalResult {
+  signal: OperationsDurationSignalValue;
+  currentWindow: DurationSignalWindow;
+  priorWindow: DurationSignalWindow;
+  referenceWindow: DurationSignalWindow;
+}
+
+// Reine Entscheidungslogik, unabhängig von Queue/Delivery — dieselbe
+// Zwei-Fenster-Bestätigungs- und Schwellenregel für beide Dimensionen (Phase 7:
+// "ein persistentes Signal muss auf mehreren unabhängigen ... Evidenzmengen
+// beruhen"). Gibt `undefined` zurück, wenn die Mindest-Evidenz (Phase 8) nicht
+// erreicht ist.
+function evaluateDurationSignal(
+  currentCohort: DurationCohort,
+  priorCohort: DurationCohort,
+  referenceCohort: DurationCohort,
+  currentBounds: { startsAt: string; endsAt: string },
+  priorBounds: { startsAt: string; endsAt: string },
+  referenceBounds: { startsAt: string; endsAt: string },
+  horizonDays: number,
+): DurationSignalResult | undefined {
+  if (
+    currentCohort.cases.length < SIGNAL_MIN_WINDOW_POPULATION ||
+    priorCohort.cases.length < SIGNAL_MIN_WINDOW_POPULATION ||
+    referenceCohort.cases.length < SIGNAL_MIN_REFERENCE_POPULATION
+  ) {
+    return undefined;
+  }
+
+  const currentWindow = buildSignalWindow(currentCohort, currentBounds.startsAt, currentBounds.endsAt, horizonDays);
+  const priorWindow = buildSignalWindow(priorCohort, priorBounds.startsAt, priorBounds.endsAt, horizonDays);
+  const referenceWindow = buildSignalWindow(referenceCohort, referenceBounds.startsAt, referenceBounds.endsAt, horizonDays);
+
+  const upThreshold = referenceWindow.rmstDays * (1 + SIGNAL_ELEVATED_THRESHOLD_FRAC);
+  const downThreshold = referenceWindow.rmstDays * (1 - SIGNAL_REDUCED_THRESHOLD_FRAC);
+  const elevated = currentWindow.rmstDays > upThreshold && priorWindow.rmstDays > upThreshold;
+  const reduced = currentWindow.rmstDays < downThreshold && priorWindow.rmstDays < downThreshold;
+  const signal: OperationsDurationSignalValue = elevated ? "verlaengerte-dauer" : reduced ? "verkuerzte-dauer" : "stabil";
+
+  return { signal, currentWindow, priorWindow, referenceWindow };
+}
+
+function durationSignalStatement(
+  signal: OperationsDurationSignalValue,
+  subject: string,
+  result: DurationSignalResult,
+  horizonDays: number,
+): string {
+  const { currentWindow, priorWindow, referenceWindow } = result;
+  if (signal === "stabil") {
+    return (
+      `${subject} zeigt in den letzten ${2 * SIGNAL_WINDOW_DAYS} Tagen keine anhaltende Abweichung vom historischen ` +
+      `Referenzniveau (RMST ${currentWindow.rmstDays.toFixed(1)} und ${priorWindow.rmstDays.toFixed(1)} Tage in den letzten ` +
+      `beiden ${SIGNAL_WINDOW_DAYS}-Tage-Fenstern vs. ${referenceWindow.rmstDays.toFixed(1)} Tage Referenz, Horizont ${horizonDays} Tage).`
+    );
+  }
+  const direction = signal === "verlaengerte-dauer" ? "über" : "unter";
+  return (
+    `${subject} lag in zwei bestätigenden Zeitfenstern anhaltend ${direction} dem historischen Referenzniveau ` +
+    `(RMST ${currentWindow.rmstDays.toFixed(1)} und ${priorWindow.rmstDays.toFixed(1)} Tage vs. ${referenceWindow.rmstDays.toFixed(1)} ` +
+    `Tage Referenz, Horizont ${horizonDays} Tage).`
+  );
+}
+
+export interface QueueDurationSignalObservation {
+  id: string;
+  kind: ObservationKind;
+  generatedAt: string;
+  area: "Delivery";
+  statement: string;
+  confidence: Observation["confidence"];
+  signal: OperationsDurationSignalValue;
+  horizonDays: number;
+  currentWindow: DurationSignalWindow;
+  priorWindow: DurationSignalWindow;
+  referenceWindow: DurationSignalWindow;
+  differenceDays: number;
+  derivedFrom: string[];
+}
+
+// asOf-sicher (dieselbe Garantie wie generateMarketingDemandRegimeSignalObservation):
+// verwendet ausschließlich Units mit den bereits asOf-gefilterten Zeitstempeln
+// aus der übergebenen deliveryUnits-Liste plus timelineStart als einzige
+// zusätzliche, nicht von deliveryUnits abgeleitete Information. Kein Regime-
+// Wissen, keine Kenntnis künftiger Ereignisse.
+export function generateOperationsQueueDurationSignalObservation(
+  deliveryUnits: readonly DeliveryUnit[],
+  asOf: string,
+  timelineStart: string,
+): QueueDurationSignalObservation | undefined {
+  const currentStart = addDays(asOf, -SIGNAL_WINDOW_DAYS);
+  const priorStart = addDays(asOf, -2 * SIGNAL_WINDOW_DAYS);
+  const referenceEnd = priorStart;
+
+  if (referenceEnd < timelineStart) {
+    return undefined;
+  }
+  const referenceDays = daysBetween(timelineStart, referenceEnd);
+  if (referenceDays < SIGNAL_MIN_REFERENCE_DAYS) {
+    return undefined;
+  }
+
+  const currentCohort = queueCohort(deliveryUnits, currentStart, asOf, asOf);
+  const priorCohort = queueCohort(deliveryUnits, priorStart, currentStart, asOf);
+  const referenceCohort = queueCohort(deliveryUnits, addDays(timelineStart, -1), referenceEnd, asOf);
+
+  const result = evaluateDurationSignal(
+    currentCohort,
+    priorCohort,
+    referenceCohort,
+    { startsAt: currentStart, endsAt: asOf },
+    { startsAt: priorStart, endsAt: currentStart },
+    { startsAt: timelineStart, endsAt: referenceEnd },
+    QUEUE_SIGNAL_HORIZON_DAYS,
+  );
+  if (result === undefined) {
+    return undefined;
+  }
+
+  const statement = durationSignalStatement(
+    result.signal,
+    "Die Zeit zwischen Lieferverpflichtung und tatsächlichem Start",
+    result,
+    QUEUE_SIGNAL_HORIZON_DAYS,
+  );
+
+  return {
+    id: `operations-obs-queue-duration-signal-${asOf}`,
+    kind: "operations-queue-duration-signal",
+    generatedAt: asOf,
+    area: "Delivery",
+    statement,
+    // "hoch": beide Fenster bestätigen unabhängig dieselbe Berechnung UND die
+    // Referenz erfüllt bereits das Mindest-Evidenz-Kriterium (dieselbe
+    // Begründung wie MarketingDemandSignalObservation.confidence) — gilt auch
+    // für signal="stabil" (die Abwesenheit einer Abweichung ist ebenfalls eine
+    // fachlich gut begründete Aussage, keine geratene).
+    confidence: "hoch",
+    signal: result.signal,
+    horizonDays: QUEUE_SIGNAL_HORIZON_DAYS,
+    currentWindow: result.currentWindow,
+    priorWindow: result.priorWindow,
+    referenceWindow: result.referenceWindow,
+    differenceDays: result.currentWindow.rmstDays - result.referenceWindow.rmstDays,
+    derivedFrom: [...new Set([...currentCohort.unitIds, ...priorCohort.unitIds, ...referenceCohort.unitIds])],
+  };
+}
+
+export interface DeliveryDurationSignalObservation {
+  id: string;
+  kind: ObservationKind;
+  generatedAt: string;
+  area: "Delivery";
+  statement: string;
+  confidence: Observation["confidence"];
+  signal: OperationsDurationSignalValue;
+  horizonDays: number;
+  currentWindow: DurationSignalWindow;
+  priorWindow: DurationSignalWindow;
+  referenceWindow: DurationSignalWindow;
+  differenceDays: number;
+  derivedFrom: string[];
+}
+
+export function generateOperationsDeliveryDurationSignalObservation(
+  deliveryUnits: readonly DeliveryUnit[],
+  asOf: string,
+  timelineStart: string,
+): DeliveryDurationSignalObservation | undefined {
+  const currentStart = addDays(asOf, -SIGNAL_WINDOW_DAYS);
+  const priorStart = addDays(asOf, -2 * SIGNAL_WINDOW_DAYS);
+  const referenceEnd = priorStart;
+
+  if (referenceEnd < timelineStart) {
+    return undefined;
+  }
+  const referenceDays = daysBetween(timelineStart, referenceEnd);
+  if (referenceDays < SIGNAL_MIN_REFERENCE_DAYS) {
+    return undefined;
+  }
+
+  const currentCohort = deliveryCohort(deliveryUnits, currentStart, asOf, asOf);
+  const priorCohort = deliveryCohort(deliveryUnits, priorStart, currentStart, asOf);
+  const referenceCohort = deliveryCohort(deliveryUnits, addDays(timelineStart, -1), referenceEnd, asOf);
+
+  const result = evaluateDurationSignal(
+    currentCohort,
+    priorCohort,
+    referenceCohort,
+    { startsAt: currentStart, endsAt: asOf },
+    { startsAt: priorStart, endsAt: currentStart },
+    { startsAt: timelineStart, endsAt: referenceEnd },
+    DELIVERY_SIGNAL_HORIZON_DAYS,
+  );
+  if (result === undefined) {
+    return undefined;
+  }
+
+  const statement = durationSignalStatement(
+    result.signal,
+    "Die tatsächliche Dauer zwischen Start und Abschluss",
+    result,
+    DELIVERY_SIGNAL_HORIZON_DAYS,
+  );
+
+  return {
+    id: `operations-obs-delivery-duration-signal-${asOf}`,
+    kind: "operations-delivery-duration-signal",
+    generatedAt: asOf,
+    area: "Delivery",
+    statement,
+    confidence: "hoch",
+    signal: result.signal,
+    horizonDays: DELIVERY_SIGNAL_HORIZON_DAYS,
+    currentWindow: result.currentWindow,
+    priorWindow: result.priorWindow,
+    referenceWindow: result.referenceWindow,
+    differenceDays: result.currentWindow.rmstDays - result.referenceWindow.rmstDays,
+    derivedFrom: [...new Set([...currentCohort.unitIds, ...priorCohort.unitIds, ...referenceCohort.unitIds])],
   };
 }

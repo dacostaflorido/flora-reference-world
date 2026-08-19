@@ -496,7 +496,7 @@ describe("Integration", () => {
       [fairShare!, completedDuration!, queueDuration!, baselineObservation],
       WORLD_NOW,
     );
-    const summary = generateOperationsAreaSummary(fairShare, completedDuration, queueDuration, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, completedDuration, queueDuration, baselineObservation, undefined, undefined, groundTruth);
     expect(summary.topObservations.length).toBe(4);
     expect(summary.topObservations.map((o) => o.id)).toContain(baselineObservation.id);
     expect(summary.statement).toBe(fairShare!.statement);
@@ -504,7 +504,7 @@ describe("Integration", () => {
 
   it("61. relevante Metriken ohne Kollision", () => {
     const groundTruth = generateGroundTruthSnapshot([baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(undefined, undefined, undefined, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(undefined, undefined, undefined, baselineObservation, undefined, undefined, groundTruth);
     expect(summary.relevantMetrics.evaluatedDeliveryCommitmentsTotal).toBe(79);
     expect(summary.relevantMetrics.waitingDeliveryUnitsTotal).toBe(7);
     expect(summary.relevantMetrics.waitingQueueAgeDaysMedian).toBe(2);
@@ -516,7 +516,7 @@ describe("Integration", () => {
   it("61b. bei W=0 keine Altersschlüssel in relevantMetrics (kein erfundener Wert)", () => {
     const obsNoWaiting = generateOperationsCurrentDeliveryQueueSnapshotObservation([startedUnit], "2025-06-01");
     const groundTruth = generateGroundTruthSnapshot([obsNoWaiting], "2025-06-01");
-    const summary = generateOperationsAreaSummary(undefined, undefined, undefined, obsNoWaiting, groundTruth);
+    const summary = generateOperationsAreaSummary(undefined, undefined, undefined, obsNoWaiting, undefined, undefined, groundTruth);
     expect(summary.relevantMetrics).not.toHaveProperty("waitingQueueAgeDaysMedian");
     expect(summary.relevantMetrics).not.toHaveProperty("waitingQueueAgeDaysMin");
     expect(summary.relevantMetrics).not.toHaveProperty("waitingQueueAgeDaysMax");
@@ -528,7 +528,7 @@ describe("Integration", () => {
   it("62. Evidence IDs dedupliziert", () => {
     const fairShare = generateOperationsDeliveryFairShareObservation(units, EMPLOYEES, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot([fairShare!, baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(fairShare, undefined, undefined, baselineObservation, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, undefined, undefined, baselineObservation, undefined, undefined, groundTruth);
     expect(new Set(summary.evidenceIds).size).toBe(summary.evidenceIds.length);
     for (const id of baselineObservation.derivedFrom) {
       expect(summary.evidenceIds).toContain(id);
@@ -637,6 +637,8 @@ describe("Regression", () => {
       snapshot.completedDeliveryDurationObservation,
       snapshot.queueDurationObservation,
       snapshot.currentDeliveryQueueSnapshotObservation,
+      snapshot.queueDurationSignalObservation,
+      snapshot.deliveryDurationSignalObservation,
       groundTruth,
     );
     expect(summary.state).toBeNull();

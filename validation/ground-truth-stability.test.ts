@@ -155,6 +155,10 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // Current Delivery Queue Snapshot V1: additiv, s. GROUND_TRUTH_PRIORITIES
       // in ground-truth.ts.
       "operations-current-delivery-queue": "unterstuetzend",
+      // Queue/Delivery Duration Signal Observation: additiv, s.
+      // GROUND_TRUTH_PRIORITIES in ground-truth.ts.
+      "operations-queue-duration-signal": "unterstuetzend",
+      "operations-delivery-duration-signal": "unterstuetzend",
       // Marketing as First-Class Company Area: additiv, s. GROUND_TRUTH_PRIORITIES
       // in ground-truth.ts. world.observations (SCENARIO_WORLDS) enthält nie
       // Marketing-Kinds — nur für Record-Vollständigkeit erforderlich.
@@ -206,6 +210,10 @@ describe("Ground Truth: Priorität/Gruppe sind stabil über alle Scenario Profil
       // Current Delivery Queue Snapshot V1: additiv, s. OBSERVATION_GROUP_LABELS
       // in ground-truth.ts.
       "operations-current-delivery-queue": "Delivery",
+      // Queue/Delivery Duration Signal Observation: additiv, s.
+      // OBSERVATION_GROUP_LABELS in ground-truth.ts.
+      "operations-queue-duration-signal": "Delivery",
+      "operations-delivery-duration-signal": "Delivery",
       // Marketing as First-Class Company Area: additiv, s. OBSERVATION_GROUP_LABELS
       // in ground-truth.ts.
       "marketing-demand-generation-volume": "Nachfrage",

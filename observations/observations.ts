@@ -89,6 +89,23 @@ export type ObservationKind =
   // übrigen Operations-Kinds über eine separate Observation-Struktur
   // transportiert (keine erfundene severity/category).
   | "operations-current-delivery-queue"
+  // Queue Duration Signal Observation (Auftrag "Operations Delivery Flow Signal
+  // Design"): additiv, keine neue Taxonomie. Erzeugt ausschließlich in
+  // observations/operations-observations.ts. Anders als die rein deskriptiven
+  // Kinds oben (Complete-Case-basiert, keine Zensierung, kein Vergleichsmaßstab):
+  // eine zensierungskorrekte (Kaplan-Meier/Restricted-Mean-Survival-Time),
+  // persistente (zwei bestätigende Zeitfenster) Richtungsaussage — verlängert
+  // sich die Zeit zwischen Lieferverpflichtung und tatsächlichem Start anhaltend
+  // gegenüber dem historischen Referenzniveau, oder verkürzt sie sich? Weiterhin
+  // KEINE Bewertung (kein "gut"/"schlecht"/"überlastet"), kein Operations State,
+  // keine Kapazitäts-/SLA-Aussage — reine, deskriptive Richtungsobservation wie
+  // "marketing-demand-regime-signal", nur methodisch auf rechtszensierte
+  // Dauerdaten statt reiner Volumendichte angewendet.
+  | "operations-queue-duration-signal"
+  // Delivery Duration Signal Observation: strukturell identisch zu
+  // "operations-queue-duration-signal", auf der zweiten unabhängigen Dimension
+  // (tatsächliche Dauer zwischen Start und Abschluss statt Wartezeit bis Start).
+  | "operations-delivery-duration-signal"
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, keine neue
   // Taxonomie. Erzeugt ausschließlich in observations/marketing-observations.ts,
   // aus Lead-/Sales-Handoff-Fakten (dieselbe Quelle wie

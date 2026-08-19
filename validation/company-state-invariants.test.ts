@@ -45,7 +45,7 @@ function realAreaSummaries(): CompanyAreaSummary[] {
   // validation/queue-duration.test.ts und
   // validation/current-delivery-queue-snapshot.test.ts) — undefined hält das
   // bestehende, bereits validierte Verhalten dieser Datei unverändert.
-  const operationsSummary = generateOperationsAreaSummary(operationsObservation, undefined, undefined, undefined, operationsGroundTruth);
+  const operationsSummary = generateOperationsAreaSummary(operationsObservation, undefined, undefined, undefined, undefined, undefined, operationsGroundTruth);
 
   const marketingObservation = generateMarketingDemandGenerationObservation(world.leads, world.opportunities, WORLD_NOW);
   const marketingDemandSignal = generateMarketingDemandRegimeSignalObservation(world.leads, WORLD_NOW, WORLD_TIMELINE_START);
@@ -413,7 +413,7 @@ describe("Backward Explainability (Phase 20)", () => {
   it("30. Operations: Company Summary → Operations Ground Truth → Operations Observation → DeliveryUnit → Opportunity", () => {
     const operationsObservation = generateOperationsDeliveryFairShareObservation(world.deliveryUnits, EMPLOYEES, WORLD_NOW)!;
     const operationsGroundTruth = generateGroundTruthSnapshot([operationsObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(operationsObservation, undefined, undefined, undefined, operationsGroundTruth);
+    const summary = generateOperationsAreaSummary(operationsObservation, undefined, undefined, undefined, undefined, undefined, operationsGroundTruth);
 
     expect(operationsGroundTruth.activeObservationIds).toContain(operationsObservation.id);
     for (const id of summary.evidenceIds) {

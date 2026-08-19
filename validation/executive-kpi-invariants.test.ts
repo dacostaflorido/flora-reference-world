@@ -293,7 +293,12 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
     // weitere sechs Schlüssel — 79 bis WORLD_NOW entstandene
     // Lieferverpflichtungen, davon 7 wartend, Wartezeit-Alter 1-3 Tage, Median 2,
     // ältester Queue-Zeitpunkt 2025-08-29 (siehe
-    // validation/current-delivery-queue-snapshot.test.ts).
+    // validation/current-delivery-queue-snapshot.test.ts). Queue/Delivery
+    // Duration Signal Observation (Auftrag "Operations Delivery Flow Signal
+    // Design"): weitere vier Schlüssel — bei WORLD_NOW (kein aktives Regime in
+    // der Baseline-Welt) zeigen beide Signale erwartungsgemäß "stabil", mit den
+    // exakt gemessenen RMST-Differenzen (siehe
+    // validation/operations-duration-signal.test.ts).
     const operations = context.executiveContext.areaSummaries.find((a) => a.key === "operations")!;
     expect(operations.relevantMetrics).toEqual({
       activeDeliveryUnits: 15,
@@ -315,6 +320,10 @@ describe("Operations: bewusst nicht Teil des neuen Contracts (Phase 14/23)", () 
       waitingQueueAgeDaysMin: 1,
       waitingQueueAgeDaysMax: 3,
       oldestWaitingQueuedAt: "2025-08-29",
+      queueDurationSignal: "stabil",
+      queueDurationSignalDifferenceDays: 0.31535353535353483,
+      deliveryDurationSignal: "stabil",
+      deliveryDurationSignalDifferenceDays: 2.496598639455783,
     });
   });
 

@@ -409,10 +409,11 @@ describe("Regression (Operations-spezifisch — domänenübergreifende Regressio
   // Ursprünglich ein Regressionswächter dafür, dass der Delivery-Commitment-Truth-
   // Auftrag KEINE neue Observation einführt (damals korrekt). Jeder nachfolgende
   // Auftrag (Completed Delivery Duration, Queue Duration, Current Delivery Queue
-  // Snapshot) führt explizit genau eine neue, autorisierte Observation ein — der
-  // Wächter bleibt sinnvoll als Schutz gegen eine FÜNFTE, nicht autorisierte
-  // Observation, jetzt mit exakt vier erwarteten Exports.
-  it("49. keine unautorisierte fünfte Observation eingeführt (exakt Fair-Share + Completed Delivery Duration + Queue Duration + Current Delivery Queue Snapshot)", () => {
+  // Snapshot, jetzt Queue/Delivery Duration Signal) führt explizit genau die
+  // autorisierten neuen Observations ein — der Wächter bleibt sinnvoll als
+  // Schutz gegen eine SIEBTE, nicht autorisierte Observation, jetzt mit exakt
+  // sechs erwarteten Exports.
+  it("49. keine unautorisierte siebte Observation eingeführt (exakt Fair-Share + Completed Delivery Duration + Queue Duration + Current Delivery Queue Snapshot + Queue/Delivery Duration Signal)", () => {
     const observationExports = Object.keys(OperationsObservationsModule).filter(
       (name) => name.startsWith("generate") && name.endsWith("Observation"),
     );
@@ -422,6 +423,8 @@ describe("Regression (Operations-spezifisch — domänenübergreifende Regressio
         "generateOperationsCurrentDeliveryQueueSnapshotObservation",
         "generateOperationsDeliveryFairShareObservation",
         "generateOperationsQueueDurationObservation",
+        "generateOperationsQueueDurationSignalObservation",
+        "generateOperationsDeliveryDurationSignalObservation",
       ].sort(),
     );
   });

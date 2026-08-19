@@ -68,6 +68,8 @@ export function generateCompanyContextFromSnapshot(
       ...(snapshot.completedDeliveryDurationObservation ? [snapshot.completedDeliveryDurationObservation] : []),
       ...(snapshot.queueDurationObservation ? [snapshot.queueDurationObservation] : []),
       snapshot.currentDeliveryQueueSnapshotObservation,
+      ...(snapshot.queueDurationSignalObservation ? [snapshot.queueDurationSignalObservation] : []),
+      ...(snapshot.deliveryDurationSignalObservation ? [snapshot.deliveryDurationSignalObservation] : []),
     ],
     snapshot.asOf,
   );
@@ -102,6 +104,8 @@ export function generateCompanyContextFromSnapshot(
       snapshot.completedDeliveryDurationObservation,
       snapshot.queueDurationObservation,
       snapshot.currentDeliveryQueueSnapshotObservation,
+      snapshot.queueDurationSignalObservation,
+      snapshot.deliveryDurationSignalObservation,
       operationsGroundTruth,
     ),
   ];

@@ -386,7 +386,7 @@ describe("Integration", () => {
   it("40. Operations Area Summary referenziert Evidence korrekt (beide Observations kombiniert)", () => {
     const fairShare = generateOperationsDeliveryFairShareObservation(units, EMPLOYEES, WORLD_NOW);
     const groundTruth = generateGroundTruthSnapshot([fairShare!, baselineObservation], WORLD_NOW);
-    const summary = generateOperationsAreaSummary(fairShare, baselineObservation, undefined, undefined, groundTruth);
+    const summary = generateOperationsAreaSummary(fairShare, baselineObservation, undefined, undefined, undefined, undefined, groundTruth);
     expect(summary.topObservations.length).toBe(2);
     expect(summary.topObservations.map((o) => o.id)).toContain(baselineObservation.id);
     expect(summary.relevantMetrics.completedDeliveryUnitsTotal).toBe(57);
@@ -445,6 +445,8 @@ describe("Regression", () => {
       snapshot.completedDeliveryDurationObservation,
       snapshot.queueDurationObservation,
       snapshot.currentDeliveryQueueSnapshotObservation,
+      snapshot.queueDurationSignalObservation,
+      snapshot.deliveryDurationSignalObservation,
       groundTruth,
     );
     expect(summary.state).toBeNull();

@@ -632,7 +632,7 @@ describe("Operations Regime Foundation — Regression (54-67)", () => {
     expect(context.businessState.insufficientEvidenceAreas).toContain("operations");
   });
 
-  it("58. kein neues Observation Kind wurde eingeführt (Operations-Observation-Generatoren exakt die bekannten vier)", async () => {
+  it("58. kein über diesen Auftrag hinausgehendes neues Observation Kind wurde eingeführt (Operations-Observation-Generatoren exakt die zum Zeitpunkt dieses Tests bekannten sechs — aktualisiert durch Auftrag 'Operations Delivery Flow Signal Design', der explizit genau zwei neue, autorisierte Observations hinzufügt)", async () => {
     const mod = await import("../observations/operations-observations");
     const generatorExportNames = Object.keys(mod).filter((k) => k.startsWith("generateOperations"));
     expect(generatorExportNames.sort()).toEqual(
@@ -641,6 +641,8 @@ describe("Operations Regime Foundation — Regression (54-67)", () => {
         "generateOperationsCurrentDeliveryQueueSnapshotObservation",
         "generateOperationsDeliveryFairShareObservation",
         "generateOperationsQueueDurationObservation",
+        "generateOperationsQueueDurationSignalObservation",
+        "generateOperationsDeliveryDurationSignalObservation",
       ].sort(),
     );
   });

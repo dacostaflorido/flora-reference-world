@@ -155,6 +155,14 @@ const GROUND_TRUTH_PRIORITIES: Record<ObservationKind, GroundTruthPriority["tier
   // oben — ein rein deskriptiver Stichtags-Fakt ohne jede Bewertungsgrundlage.
   "operations-current-delivery-queue": "unterstuetzend",
 
+  // Queue/Delivery Duration Signal Observation (Auftrag "Operations Delivery
+  // Flow Signal Design"): additiv, vom Compiler erzwungen (s. o.).
+  // "unterstuetzend" aus identischer Begründung wie die übrigen
+  // Operations-Kinds — eine Richtungsaussage ohne jede Bewertungsgrundlage
+  // (kein Operations State, keine Kapazitäts-/SLA-Interpretation).
+  "operations-queue-duration-signal": "unterstuetzend",
+  "operations-delivery-duration-signal": "unterstuetzend",
+
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom Compiler
   // erzwungen (s. o.). "unterstuetzend" aus identischer Begründung wie Operations
   // oben — reines Volumen ohne im Domainmodell begründbare Schwelle, keine
@@ -224,6 +232,11 @@ const OBSERVATION_GROUP_LABELS: Record<ObservationKind, string> = {
   // Current Delivery Queue Snapshot V1: additiv, vom Compiler erzwungen (s. o.).
   // Dieselbe Gruppe "Delivery" wie die übrigen Operations-Kinds.
   "operations-current-delivery-queue": "Delivery",
+  // Queue/Delivery Duration Signal Observation: dieselbe Gruppe "Delivery" wie
+  // die übrigen Operations-Kinds — beschreibt denselben Sachverhalt
+  // (Delivery-Lifecycle), nur als Richtungsvergleich statt Momentaufnahme.
+  "operations-queue-duration-signal": "Delivery",
+  "operations-delivery-duration-signal": "Delivery",
 
   // Marketing-Domäne (Marketing as First-Class Company Area): additiv, vom
   // Compiler erzwungen (s. o.). Eigene, neue Gruppe "Nachfrage" — keine der

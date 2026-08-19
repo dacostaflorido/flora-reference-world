@@ -9,6 +9,8 @@ import type {
   CompletedDeliveryDurationObservation,
   QueueDurationObservation,
   CurrentDeliveryQueueSnapshotObservation,
+  QueueDurationSignalObservation,
+  DeliveryDurationSignalObservation,
 } from "../observations/operations-observations";
 import type { MarketingObservation, MarketingDemandSignalObservation } from "../observations/marketing-observations";
 import type { CompanyAreaObservationSummary, CompanyAreaSummary } from "./company-area";
@@ -111,6 +113,8 @@ export function generateOperationsAreaSummary(
   completedDeliveryDuration: CompletedDeliveryDurationObservation | undefined,
   queueDuration: QueueDurationObservation | undefined,
   currentDeliveryQueueSnapshot: CurrentDeliveryQueueSnapshotObservation | undefined,
+  queueDurationSignal: QueueDurationSignalObservation | undefined,
+  deliveryDurationSignal: DeliveryDurationSignalObservation | undefined,
   groundTruth: GroundTruthSnapshot,
 ): CompanyAreaSummary {
   const isActive = observation !== undefined && groundTruth.activeObservationIds.includes(observation.id);
@@ -119,6 +123,10 @@ export function generateOperationsAreaSummary(
   const isQueueDurationActive = queueDuration !== undefined && groundTruth.activeObservationIds.includes(queueDuration.id);
   const isCurrentQueueActive =
     currentDeliveryQueueSnapshot !== undefined && groundTruth.activeObservationIds.includes(currentDeliveryQueueSnapshot.id);
+  const isQueueSignalActive =
+    queueDurationSignal !== undefined && groundTruth.activeObservationIds.includes(queueDurationSignal.id);
+  const isDeliverySignalActive =
+    deliveryDurationSignal !== undefined && groundTruth.activeObservationIds.includes(deliveryDurationSignal.id);
 
   const topObservations: CompanyAreaObservationSummary[] = [
     ...(isActive ? [{ id: observation!.id, statement: observation!.statement, confidence: observation!.confidence }] : []),
@@ -130,6 +138,12 @@ export function generateOperationsAreaSummary(
       : []),
     ...(isCurrentQueueActive
       ? [{ id: currentDeliveryQueueSnapshot!.id, statement: currentDeliveryQueueSnapshot!.statement, confidence: currentDeliveryQueueSnapshot!.confidence }]
+      : []),
+    ...(isQueueSignalActive
+      ? [{ id: queueDurationSignal!.id, statement: queueDurationSignal!.statement, confidence: queueDurationSignal!.confidence }]
+      : []),
+    ...(isDeliverySignalActive
+      ? [{ id: deliveryDurationSignal!.id, statement: deliveryDurationSignal!.statement, confidence: deliveryDurationSignal!.confidence }]
       : []),
   ];
 
@@ -181,6 +195,18 @@ export function generateOperationsAreaSummary(
             : {}),
         }
       : {}),
+    ...(isQueueSignalActive
+      ? {
+          queueDurationSignal: queueDurationSignal!.signal,
+          queueDurationSignalDifferenceDays: queueDurationSignal!.differenceDays,
+        }
+      : {}),
+    ...(isDeliverySignalActive
+      ? {
+          deliveryDurationSignal: deliveryDurationSignal!.signal,
+          deliveryDurationSignalDifferenceDays: deliveryDurationSignal!.differenceDays,
+        }
+      : {}),
   };
 
   // evidenceIds: Vereinigung aller aktiven Observation-Evidenzketten (dedupliziert,
@@ -195,6 +221,8 @@ export function generateOperationsAreaSummary(
       ...(isDurationActive ? completedDeliveryDuration!.derivedFrom : []),
       ...(isQueueDurationActive ? queueDuration!.derivedFrom : []),
       ...(isCurrentQueueActive ? currentDeliveryQueueSnapshot!.derivedFrom : []),
+      ...(isQueueSignalActive ? queueDurationSignal!.derivedFrom : []),
+      ...(isDeliverySignalActive ? deliveryDurationSignal!.derivedFrom : []),
     ]),
   ];
 
