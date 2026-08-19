@@ -25,6 +25,19 @@ import {
   type DeliveryStarted,
   type DeliveryCompleted,
 } from "../events/delivery-lifecycle";
+import { generateSalesAppointments, type SalesAppointment } from "../world/sales-appointments";
+import {
+  generateSalesAppointmentBookedEvents,
+  generateSalesAppointmentRescheduledEvents,
+  generateSalesAppointmentCancelledEvents,
+  generateSalesAppointmentNoShowEvents,
+  generateSalesAppointmentHeldEvents,
+  type SalesAppointmentBooked,
+  type SalesAppointmentRescheduled,
+  type SalesAppointmentCancelled,
+  type SalesAppointmentNoShowRecorded,
+  type SalesAppointmentHeld,
+} from "../events/sales-appointment-lifecycle";
 import { generateObservations, type Observation } from "../observations/observations";
 import { generateGroundTruthSnapshot, type GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -79,6 +92,18 @@ export interface ScenarioWorldTruth {
   deliveryQueuedEvents: DeliveryQueued[];
   deliveryStartedEvents: DeliveryStarted[];
   deliveryCompletedEvents: DeliveryCompleted[];
+  // Sales Appointment Lifecycle Foundation: additiv, scenario-abhängig (aus den
+  // bereits scenario-abhängigen leads/opportunities abgeleitet — dieselbe
+  // Einordnung wie deliveryUnits oben). salesAppointments ist die generierte
+  // Wahrheit, die vier folgenden Felder sind reine, wörtliche Projektionen
+  // davon (siehe events/sales-appointment-lifecycle.ts). Noch keine KPIs, keine
+  // Observations, kein Public-Contract-Bezug (Auftrag, harte Scope-Grenze).
+  salesAppointments: SalesAppointment[];
+  salesAppointmentBookedEvents: SalesAppointmentBooked[];
+  salesAppointmentRescheduledEvents: SalesAppointmentRescheduled[];
+  salesAppointmentCancelledEvents: SalesAppointmentCancelled[];
+  salesAppointmentNoShowEvents: SalesAppointmentNoShowRecorded[];
+  salesAppointmentHeldEvents: SalesAppointmentHeld[];
   observations: Observation[];
   groundTruth: GroundTruthSnapshot;
 }
@@ -104,6 +129,13 @@ const SEED_STEP = {
   // Operations Foundation (Reference World v2, Schritt 2): additiver neuer Schritt,
   // bestehende Offsets 3-6 unverändert.
   deliveryUnits: 7,
+  // Sales Appointment Lifecycle Foundation: additiver neuer Schritt, bestehende
+  // Offsets 3-7 unverändert. salesAppointments verwendet zusätzlich eigene,
+  // entity-stabile Sub-Offsets (world/sales-appointments.ts,
+  // FIRST_CALL_SEED_OFFSET/STRATEGY_CALL_SEED_OFFSET/REBOOKING_SEED_OFFSET) —
+  // dieser Schritt-Offset ist nur die äußere Isolation gegenüber den übrigen
+  // Generierungsschritten, analog zu deliveryUnits oben.
+  salesAppointments: 8,
 } as const;
 
 // operationsLifecycleModel (Operations Regime Foundation, Phase B): bewusst ein
@@ -182,6 +214,24 @@ export function generateScenarioWorld(
   const deliveryStartedEvents = generateDeliveryStartedEvents(deliveryUnits);
   const deliveryCompletedEvents = generateDeliveryCompletedEvents(deliveryUnits);
 
+  // Sales Appointment Lifecycle Foundation: abgeleitet ausschließlich aus den
+  // bereits generierten, scenario-abhängigen leads/opportunities/stageHistory
+  // — Lead-/Opportunity-Welt → Appointment Lifecycle (Kausalrichtung B12/B13),
+  // niemals umgekehrt. Kein Einfluss auf leads/opportunities/stageHistory
+  // selbst (rein additiv, siehe world/sales-appointments.ts).
+  const salesAppointments = generateSalesAppointments(
+    worldSeed + SEED_STEP.salesAppointments + offset,
+    leads,
+    opportunities,
+    stageHistory,
+    EMPLOYEES,
+  );
+  const salesAppointmentBookedEvents = generateSalesAppointmentBookedEvents(salesAppointments);
+  const salesAppointmentRescheduledEvents = generateSalesAppointmentRescheduledEvents(salesAppointments);
+  const salesAppointmentCancelledEvents = generateSalesAppointmentCancelledEvents(salesAppointments);
+  const salesAppointmentNoShowEvents = generateSalesAppointmentNoShowEvents(salesAppointments);
+  const salesAppointmentHeldEvents = generateSalesAppointmentHeldEvents(salesAppointments);
+
   // --- Events → Observations → Ground Truth (Prinzip 7/17) ----------------------
   // Observations sind ein reiner Analyse-Schritt ohne eigenen Zufallsstrom (keine
   // Rule Engine) — derselbe, unveränderte Code läuft gegen die tatsächlich erzeugte
@@ -216,6 +266,12 @@ export function generateScenarioWorld(
     deliveryQueuedEvents,
     deliveryStartedEvents,
     deliveryCompletedEvents,
+    salesAppointments,
+    salesAppointmentBookedEvents,
+    salesAppointmentRescheduledEvents,
+    salesAppointmentCancelledEvents,
+    salesAppointmentNoShowEvents,
+    salesAppointmentHeldEvents,
     observations,
     groundTruth,
   };
