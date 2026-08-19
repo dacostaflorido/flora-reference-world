@@ -34,6 +34,8 @@ import type { Email } from "../events/emails";
 import type { Meeting } from "../events/meetings";
 import type { MeetingTranscript } from "../events/meeting-transcripts";
 import type { CrmActivity } from "../events/crm-activities";
+import type { SalesAppointmentBooked, SalesAppointmentHeld } from "../events/sales-appointment-lifecycle";
+import { generateSalesPeriodMetrics, type SalesPeriodMetricsSnapshot } from "../company/sales-period-metrics";
 
 // Snapshot ist die zeitliche Projektion der Event-Historie: der vollständige
 // Weltzustand zu einem beliebigen Zeitpunkt `asOf`, nicht nur zu WORLD_NOW. Snapshot
@@ -148,6 +150,20 @@ export interface WorldSnapshot {
   meetings: Meeting[];
   meetingTranscripts: MeetingTranscript[];
   crmActivities: CrmActivity[];
+  // Sales Period KPI Foundation V1 (Korrekturauftrag "Sales Period Metrics
+  // Snapshot Integration"): kanonische Einmalberechnung der drei
+  // Sales-Zeiträume (Yesterday/WTD/MTD) exakt an diesem asOf — siehe
+  // company/sales-period-metrics.ts für die vollständige Zählsemantik-
+  // Begründung. Verwendet ausschließlich bereits vorhandene, an anderer
+  // Stelle generierte Booked-/Held-Events sowie die bereits im Snapshot
+  // verfügbaren, roh übergebenen Opportunities (world.opportunities, NICHT
+  // die bereits gewrappten opportunities oben) — reine Filterung/Zählung
+  // nach dem asOf dieses Snapshots, kein zweiter Berechnungsweg, keine
+  // Observation, keine Bewertung. Rein deskriptiv (Ebene 1 der Executive-
+  // Capability-Architektur) — bewusst NICHT Teil des Public Contracts (siehe
+  // company/sales-period-metrics.ts für die vollständige Begründung, warum
+  // keine Erweiterung von CompanyExecutiveKpiData/index.ts erfolgt ist).
+  salesPeriodMetrics: SalesPeriodMetricsSnapshot;
 }
 
 // Eingabeform bewusst als eigenständiges Interface definiert, nicht aus
@@ -173,6 +189,8 @@ export interface WorldSnapshotSource {
   meetings: readonly Meeting[];
   meetingTranscripts: readonly MeetingTranscript[];
   crmActivities: readonly CrmActivity[];
+  salesAppointmentBookedEvents: readonly SalesAppointmentBooked[];
+  salesAppointmentHeldEvents: readonly SalesAppointmentHeld[];
 }
 
 export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string): WorldSnapshot {
@@ -250,6 +268,21 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
   const meetingTranscripts = world.meetingTranscripts.filter((t) => includedMeetingIds.has(t.meetingId));
   const crmActivities = world.crmActivities.filter((a) => a.timestamp <= asOf);
 
+  // Sales Period KPI Foundation V1: einziger kanonischer Berechnungspunkt für
+  // Yesterday/WTD/MTD — verwendet ausdrücklich `asOf` (das asOf DIESES
+  // Snapshots), niemals WORLD_NOW. world.opportunities ist bewusst die rohe,
+  // ungewrappte Eingabe (nicht das unten stehende, bereits auf
+  // OpportunityAtSnapshot projizierte `opportunities`) — generateSalesPeriodMetrics
+  // filtert selbst und ausschließlich nach dem eigenen closedAt jeder
+  // Opportunity gegen die asOf-begrenzten Periodengrenzen, exakt dieselbe
+  // Garantie wie bei jeder anderen Existenz-Filterung in dieser Datei.
+  const salesPeriodMetrics = generateSalesPeriodMetrics(
+    asOf,
+    world.salesAppointmentBookedEvents,
+    world.salesAppointmentHeldEvents,
+    world.opportunities,
+  );
+
   return {
     asOf,
     employees,
@@ -276,5 +309,6 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     meetings,
     meetingTranscripts,
     crmActivities,
+    salesPeriodMetrics,
   };
 }

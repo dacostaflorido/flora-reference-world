@@ -366,6 +366,8 @@ describe("Integration", () => {
       meetings: world.meetings,
       meetingTranscripts: world.meetingTranscripts,
       crmActivities: world.crmActivities,
+      salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+      salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     };
   }
 
@@ -489,6 +491,8 @@ describe("Regression", () => {
         meetings: world.meetings,
         meetingTranscripts: world.meetingTranscripts,
         crmActivities: world.crmActivities,
+        salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+        salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
       },
       WORLD_NOW,
     );

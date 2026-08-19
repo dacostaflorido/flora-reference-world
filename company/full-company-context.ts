@@ -69,6 +69,8 @@ export function generateFullCompanyContext(
     meetings: scenarioWorld.meetings,
     meetingTranscripts: scenarioWorld.meetingTranscripts,
     crmActivities: scenarioWorld.crmActivities,
+    salesAppointmentBookedEvents: scenarioWorld.salesAppointmentBookedEvents,
+    salesAppointmentHeldEvents: scenarioWorld.salesAppointmentHeldEvents,
   };
   const snapshot = generateWorldSnapshot(snapshotSource, asOf);
 

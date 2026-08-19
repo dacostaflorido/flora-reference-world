@@ -38,6 +38,8 @@ function toSource(world: ReturnType<typeof generateScenarioWorld>): WorldSnapsho
     meetings: world.meetings,
     meetingTranscripts: world.meetingTranscripts,
     crmActivities: world.crmActivities,
+    salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+    salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
   };
 }
 

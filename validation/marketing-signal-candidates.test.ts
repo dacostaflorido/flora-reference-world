@@ -99,6 +99,8 @@ describe("Marketing Signal Candidates — asOf-Sicherheit (Phase 4)", () => {
       meetings: world.meetings,
       meetingTranscripts: world.meetingTranscripts,
       crmActivities: world.crmActivities,
+      salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+      salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     };
   }
 

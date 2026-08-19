@@ -291,6 +291,8 @@ describe("Snapshot-Integration: keine Zukunftskenntnis (Prinzip 18)", () => {
       meetings: world.meetings,
       meetingTranscripts: world.meetingTranscripts,
       crmActivities: world.crmActivities,
+      salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+      salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     };
   }
 

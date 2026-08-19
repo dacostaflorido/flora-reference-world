@@ -33,6 +33,8 @@ function toSource(worldId: (typeof SCENARIO_PROFILES)[number]["id"]): WorldSnaps
     meetings: world.meetings,
     meetingTranscripts: world.meetingTranscripts,
     crmActivities: world.crmActivities,
+    salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+    salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
   };
 }
 

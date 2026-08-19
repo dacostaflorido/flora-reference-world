@@ -475,6 +475,8 @@ describe("Snapshot-Integration (Phase 21): generateCompanyContextFromSnapshot, k
       meetings: world.meetings,
       meetingTranscripts: world.meetingTranscripts,
       crmActivities: world.crmActivities,
+      salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
+      salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     };
   }
 
