@@ -71,6 +71,10 @@ export function generateFullCompanyContext(
     crmActivities: scenarioWorld.crmActivities,
     salesAppointmentBookedEvents: scenarioWorld.salesAppointmentBookedEvents,
     salesAppointmentHeldEvents: scenarioWorld.salesAppointmentHeldEvents,
+    metaAdSpendRecords: scenarioWorld.metaAdSpendRecords,
+    metaLeadGeneratedEvents: scenarioWorld.metaLeadGeneratedEvents,
+    marketingCrmLeadIngestedEvents: scenarioWorld.marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatchedEvents: scenarioWorld.marketingLeadIdentityMatchedEvents,
   };
   const snapshot = generateWorldSnapshot(snapshotSource, asOf);
 

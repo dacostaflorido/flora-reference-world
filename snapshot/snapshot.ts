@@ -36,6 +36,8 @@ import type { MeetingTranscript } from "../events/meeting-transcripts";
 import type { CrmActivity } from "../events/crm-activities";
 import type { SalesAppointmentBooked, SalesAppointmentHeld } from "../events/sales-appointment-lifecycle";
 import { generateSalesPeriodMetrics, type SalesPeriodMetricsSnapshot } from "../company/sales-period-metrics";
+import type { MetaAdSpendRecord } from "../events/marketing-meta-ad-spend";
+import type { MetaLeadGenerated, MarketingCrmLeadIngested, MarketingLeadIdentityMatched } from "../events/marketing-meta-crm-source";
 
 // Snapshot ist die zeitliche Projektion der Event-Historie: der vollständige
 // Weltzustand zu einem beliebigen Zeitpunkt `asOf`, nicht nur zu WORLD_NOW. Snapshot
@@ -164,6 +166,30 @@ export interface WorldSnapshot {
   // company/sales-period-metrics.ts für die vollständige Begründung, warum
   // keine Erweiterung von CompanyExecutiveKpiData/index.ts erfolgt ist).
   salesPeriodMetrics: SalesPeriodMetricsSnapshot;
+  // Marketing Meta/CRM Source Foundation V1: reine Existenz-Filterung wie bei
+  // jeder anderen dynamischen Entität in Kategorie 1 oben (siehe Kopfkommentar
+  // dieser Datei). Getrennte, jeweils eigene Zeitanker pro Quelle — Auftrag
+  // B10: ein MetaAdSpendRecord ist zu asOf nur sichtbar, wenn spendDate <=
+  // asOf; ein MetaLeadGenerated-Ereignis nur, wenn generatedAt <= asOf; ein
+  // MarketingCrmLeadIngested-Datensatz nur, wenn ingestedAt <= asOf.
+  // importedAt (Spend) wird bewusst NICHT zur Filterung verwendet (B7:
+  // fachlicher Ereigniszeitpunkt, nicht Import-Zeitpunkt).
+  //
+  // Matching-Information (Korrekturauftrag "Temporal Matching Truth mit
+  // eigenem Match-Event"): lebt NICHT mehr auf dem CRM-Ingestion-Datensatz
+  // (ursprünglicher Fehler — ein zu asOf sichtbares Ingestion-Event hätte
+  // dadurch implizit auch das Match "mitgeliefert", ohne dass das Match einen
+  // eigenen, belegbaren Zeitpunkt gehabt hätte), sondern ausschließlich im
+  // eigenen, append-only `MarketingLeadIdentityMatched`-Event, das erst ab
+  // seinem eigenen `matchedAt` sichtbar wird. Der daraus abgeleitete
+  // Match-Status (`resolveMarketingLeadMatchStatus`,
+  // events/marketing-meta-crm-source.ts) ist die einzige kanonische
+  // Auswertungsstelle — kein Snapshot-Feld speichert ihn zusätzlich
+  // vorberechnet (keine zweite Match-Wahrheit).
+  metaAdSpendRecords: MetaAdSpendRecord[];
+  metaLeadGeneratedEvents: MetaLeadGenerated[];
+  marketingCrmLeadIngestedEvents: MarketingCrmLeadIngested[];
+  marketingLeadIdentityMatchedEvents: MarketingLeadIdentityMatched[];
 }
 
 // Eingabeform bewusst als eigenständiges Interface definiert, nicht aus
@@ -191,6 +217,10 @@ export interface WorldSnapshotSource {
   crmActivities: readonly CrmActivity[];
   salesAppointmentBookedEvents: readonly SalesAppointmentBooked[];
   salesAppointmentHeldEvents: readonly SalesAppointmentHeld[];
+  metaAdSpendRecords: readonly MetaAdSpendRecord[];
+  metaLeadGeneratedEvents: readonly MetaLeadGenerated[];
+  marketingCrmLeadIngestedEvents: readonly MarketingCrmLeadIngested[];
+  marketingLeadIdentityMatchedEvents: readonly MarketingLeadIdentityMatched[];
 }
 
 export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string): WorldSnapshot {
@@ -283,6 +313,19 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     world.opportunities,
   );
 
+  // Marketing Meta/CRM Source Foundation V1: reine Existenz-Filterung, jede
+  // Quelle nach ihrem eigenen fachlichen Zeitanker (siehe Kommentar auf
+  // WorldSnapshot.metaAdSpendRecords oben) — keine zweite Berechnung, keine
+  // Bewertung, nur Sichtbarkeit zu diesem asOf.
+  const metaAdSpendRecords = world.metaAdSpendRecords.filter((r) => r.spendDate <= asOf);
+  const metaLeadGeneratedEvents = world.metaLeadGeneratedEvents.filter((e) => e.generatedAt <= asOf);
+  const marketingCrmLeadIngestedEvents = world.marketingCrmLeadIngestedEvents.filter((e) => e.ingestedAt <= asOf);
+  // Korrekturauftrag "Temporal Matching Truth mit eigenem Match-Event": ein
+  // Match-Event ist zu asOf nur sichtbar, wenn `matchedAt <= asOf` — exakt
+  // dieselbe Existenz-Filterung wie bei den drei anderen Quellen oben, nur
+  // über den eigenen fachlichen Zeitanker dieses Events.
+  const marketingLeadIdentityMatchedEvents = world.marketingLeadIdentityMatchedEvents.filter((m) => m.matchedAt <= asOf);
+
   return {
     asOf,
     employees,
@@ -310,5 +353,9 @@ export function generateWorldSnapshot(world: WorldSnapshotSource, asOf: string):
     meetingTranscripts,
     crmActivities,
     salesPeriodMetrics,
+    metaAdSpendRecords,
+    metaLeadGeneratedEvents,
+    marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatchedEvents,
   };
 }

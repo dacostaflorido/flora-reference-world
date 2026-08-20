@@ -566,6 +566,10 @@ describe("Snapshot-Integration (Phase 14): DeliveryUnits/Operations Observation,
       crmActivities: world.crmActivities,
       salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
       salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+      metaAdSpendRecords: world.metaAdSpendRecords,
+      metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+      marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+      marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
     };
   }
 

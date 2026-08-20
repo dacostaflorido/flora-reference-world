@@ -38,6 +38,14 @@ import {
   type SalesAppointmentNoShowRecorded,
   type SalesAppointmentHeld,
 } from "../events/sales-appointment-lifecycle";
+import { MARKETING_CAMPAIGNS } from "../world/marketing-campaigns";
+import { generateMetaAdSpendRecords, type MetaAdSpendRecord } from "../events/marketing-meta-ad-spend";
+import {
+  generateMetaCrmSource,
+  type MetaLeadGenerated,
+  type MarketingCrmLeadIngested,
+  type MarketingLeadIdentityMatched,
+} from "../events/marketing-meta-crm-source";
 import { generateObservations, type Observation } from "../observations/observations";
 import { generateGroundTruthSnapshot, type GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -104,6 +112,25 @@ export interface ScenarioWorldTruth {
   salesAppointmentCancelledEvents: SalesAppointmentCancelled[];
   salesAppointmentNoShowEvents: SalesAppointmentNoShowRecorded[];
   salesAppointmentHeldEvents: SalesAppointmentHeld[];
+  // Marketing Meta/CRM Source Foundation V1: additiv, scenario-abhängig
+  // (metaLeadGeneratedEvents/marketingCrmLeadIngestedEvents leiten sich aus
+  // den bereits scenario-abhängigen leads ab — dieselbe Einordnung wie
+  // salesAppointments oben). metaAdSpendRecords hängt nur von der statischen
+  // Campaign-Liste ab, wird aber ebenfalls je Scenario-Offset gezogen, damit
+  // alle sechs Szenarien voneinander unabhängige, aber je Szenario stabile
+  // Spend-Daten besitzen. Reine Source Records — keine Kosten-KPIs, keine
+  // Observations, kein Public-Contract-Bezug (Auftrag, harte Scope-Grenze).
+  metaAdSpendRecords: MetaAdSpendRecord[];
+  metaLeadGeneratedEvents: MetaLeadGenerated[];
+  marketingCrmLeadIngestedEvents: MarketingCrmLeadIngested[];
+  // Korrekturauftrag "Temporal Matching Truth mit eigenem Match-Event":
+  // eigenes, append-only Match-Event mit eigenem `matchedAt` — ersetzt das
+  // vormals auf MarketingCrmLeadIngested gespeicherte `matchStatus`/
+  // `matchedMetaLeadGeneratedId` (siehe events/marketing-meta-crm-source.ts
+  // für die vollständige Begründung). Additiv, scenario-abhängig, gemeinsam
+  // mit metaLeadGeneratedEvents/marketingCrmLeadIngestedEvents in einem
+  // Durchgang erzeugt (generateMetaCrmSource).
+  marketingLeadIdentityMatchedEvents: MarketingLeadIdentityMatched[];
   observations: Observation[];
   groundTruth: GroundTruthSnapshot;
 }
@@ -136,6 +163,14 @@ const SEED_STEP = {
   // dieser Schritt-Offset ist nur die äußere Isolation gegenüber den übrigen
   // Generierungsschritten, analog zu deliveryUnits oben.
   salesAppointments: 8,
+  // Marketing Meta/CRM Source Foundation V1: additiver neuer Schritt,
+  // bestehende Offsets 3-8 unverändert. Spend/Lead-Generation/CRM-Ingestion
+  // verwenden zusätzlich eigene, entity-stabile Sub-Offsets
+  // (META_AD_SPEND_SEED_OFFSET/META_LEAD_SEED_OFFSET/META_STANDALONE_SEED_OFFSET
+  // in events/marketing-meta-ad-spend.ts bzw. events/marketing-meta-crm-source.ts)
+  // — dieser Schritt-Offset ist nur die äußere Isolation gegenüber den
+  // übrigen Generierungsschritten, analog zu salesAppointments oben.
+  marketingMetaCrmSource: 9,
 } as const;
 
 // operationsLifecycleModel (Operations Regime Foundation, Phase B): bewusst ein
@@ -232,6 +267,23 @@ export function generateScenarioWorld(
   const salesAppointmentNoShowEvents = generateSalesAppointmentNoShowEvents(salesAppointments);
   const salesAppointmentHeldEvents = generateSalesAppointmentHeldEvents(salesAppointments);
 
+  // Marketing Meta/CRM Source Foundation V1: metaAdSpendRecords hängt nur von
+  // der statischen Campaign-Liste ab; metaLeadGeneratedEvents/
+  // marketingCrmLeadIngestedEvents leiten sich aus den bereits generierten,
+  // scenario-abhängigen leads ab — Lead-Welt → Meta/CRM-Quellwahrheit
+  // (dieselbe Kausalrichtung wie bei salesAppointments oben), niemals
+  // umgekehrt. Kein Einfluss auf leads selbst (rein additiv, siehe
+  // events/marketing-meta-ad-spend.ts, events/marketing-meta-crm-source.ts).
+  const metaAdSpendRecords = generateMetaAdSpendRecords(
+    worldSeed + SEED_STEP.marketingMetaCrmSource + offset,
+    MARKETING_CAMPAIGNS,
+  );
+  const {
+    metaLeadGenerated: metaLeadGeneratedEvents,
+    crmLeadIngested: marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatched: marketingLeadIdentityMatchedEvents,
+  } = generateMetaCrmSource(worldSeed + SEED_STEP.marketingMetaCrmSource + offset, leads, MARKETING_CAMPAIGNS);
+
   // --- Events → Observations → Ground Truth (Prinzip 7/17) ----------------------
   // Observations sind ein reiner Analyse-Schritt ohne eigenen Zufallsstrom (keine
   // Rule Engine) — derselbe, unveränderte Code läuft gegen die tatsächlich erzeugte
@@ -272,6 +324,10 @@ export function generateScenarioWorld(
     salesAppointmentCancelledEvents,
     salesAppointmentNoShowEvents,
     salesAppointmentHeldEvents,
+    metaAdSpendRecords,
+    metaLeadGeneratedEvents,
+    marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatchedEvents,
     observations,
     groundTruth,
   };

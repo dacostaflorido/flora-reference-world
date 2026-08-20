@@ -101,6 +101,10 @@ describe("Marketing Signal Candidates — asOf-Sicherheit (Phase 4)", () => {
       crmActivities: world.crmActivities,
       salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
       salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+      metaAdSpendRecords: world.metaAdSpendRecords,
+      metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+      marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+      marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
     };
   }
 

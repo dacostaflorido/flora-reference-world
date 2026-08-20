@@ -465,6 +465,10 @@ describe("Integration", () => {
       crmActivities: world.crmActivities,
       salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
       salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+      metaAdSpendRecords: world.metaAdSpendRecords,
+      metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+      marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+      marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
     };
   }
 
@@ -624,6 +628,10 @@ describe("Regression", () => {
         crmActivities: world.crmActivities,
         salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
         salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+        metaAdSpendRecords: world.metaAdSpendRecords,
+        metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+        marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+        marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
       },
       WORLD_NOW,
     );

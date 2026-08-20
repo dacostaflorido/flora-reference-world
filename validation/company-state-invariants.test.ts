@@ -477,6 +477,10 @@ describe("Snapshot-Integration (Phase 21): generateCompanyContextFromSnapshot, k
       crmActivities: world.crmActivities,
       salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
       salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+      metaAdSpendRecords: world.metaAdSpendRecords,
+      metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+      marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+      marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
     };
   }
 

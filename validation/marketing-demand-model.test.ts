@@ -40,6 +40,10 @@ function toSource(world: ReturnType<typeof generateScenarioWorld>): WorldSnapsho
     crmActivities: world.crmActivities,
     salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
     salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
+    metaAdSpendRecords: world.metaAdSpendRecords,
+    metaLeadGeneratedEvents: world.metaLeadGeneratedEvents,
+    marketingCrmLeadIngestedEvents: world.marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatchedEvents: world.marketingLeadIdentityMatchedEvents,
   };
 }
 
