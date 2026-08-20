@@ -46,6 +46,7 @@ import {
   type MarketingCrmLeadIngested,
   type MarketingLeadIdentityMatched,
 } from "../events/marketing-meta-crm-source";
+import { generateMarketingSourceCoverage, type MarketingSourceCoverage } from "../events/marketing-source-coverage";
 import { generateObservations, type Observation } from "../observations/observations";
 import { generateGroundTruthSnapshot, type GroundTruthSnapshot } from "../ground-truth/ground-truth";
 import { WORLD_NOW } from "../timeline/world-clock";
@@ -131,6 +132,15 @@ export interface ScenarioWorldTruth {
   // mit metaLeadGeneratedEvents/marketingCrmLeadIngestedEvents in einem
   // Durchgang erzeugt (generateMetaCrmSource).
   marketingLeadIdentityMatchedEvents: MarketingLeadIdentityMatched[];
+  // Korrekturauftrag "Marketing Data Completeness Truth + Public Contract
+  // Protection": eigener Source-Fakt über die tatsächliche Verarbeitungs-
+  // vollständigkeit der drei Marketing-Rohdatenströme (events/marketing-
+  // source-coverage.ts) — verhindert, dass ein fehlender Record fälschlich
+  // als bewiesene Null interpretiert wird. Bewusst scenario-UNABHÄNGIG
+  // (identisch für alle sechs Profile, exakt wie MARKETING_CAMPAIGNS): die
+  // Datenpipeline-Synchronisationslage ist keine Geschäftsszenario-Eigenschaft.
+  // Bewusst NICHT über WorldSnapshot/index.ts geführt (Public Contract).
+  marketingSourceCoverage: MarketingSourceCoverage[];
   observations: Observation[];
   groundTruth: GroundTruthSnapshot;
 }
@@ -284,6 +294,11 @@ export function generateScenarioWorld(
     marketingLeadIdentityMatched: marketingLeadIdentityMatchedEvents,
   } = generateMetaCrmSource(worldSeed + SEED_STEP.marketingMetaCrmSource + offset, leads, MARKETING_CAMPAIGNS);
 
+  // Marketing Source Coverage: scenario-unabhängig, kein Seed-Bezug (siehe
+  // ScenarioWorldTruth.marketingSourceCoverage oben) — identisch für alle
+  // sechs Profile, exakt wie MARKETING_CAMPAIGNS.
+  const marketingSourceCoverage = generateMarketingSourceCoverage();
+
   // --- Events → Observations → Ground Truth (Prinzip 7/17) ----------------------
   // Observations sind ein reiner Analyse-Schritt ohne eigenen Zufallsstrom (keine
   // Rule Engine) — derselbe, unveränderte Code läuft gegen die tatsächlich erzeugte
@@ -328,6 +343,7 @@ export function generateScenarioWorld(
     metaLeadGeneratedEvents,
     marketingCrmLeadIngestedEvents,
     marketingLeadIdentityMatchedEvents,
+    marketingSourceCoverage,
     observations,
     groundTruth,
   };
