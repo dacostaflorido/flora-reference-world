@@ -360,7 +360,28 @@ function asOfWindowCoverage(stream: MarketingSourceStream, bounds: MarketingCoho
 // den fünfwertigen Availability-Zustand eingeordnet wird (K13,
 // "exakt eine Produktionsberechnung"). Rundung: kaufmännisch auf die
 // nächste Minor Unit (Math.round), da alle Beträge hier nichtnegativ sind.
-// Präzedenz: Nenner-Existenz > Coverage-Vollständigkeit > Maturity.
+//
+// KORREKTURAUFTRAG "Coverage-First Cost Status Precedence": Präzedenz
+// korrigiert zu Coverage-Vollständigkeit > Nenner-Existenz > Maturity.
+// URSPRÜNGLICHER FEHLER (korrigiert): Nenner-Existenz wurde bislang VOR
+// Coverage geprüft — ein beobachteter Nenner von 0 wurde dadurch bereits
+// als "no-denominator-events" ausgewiesen, selbst wenn die zugrunde
+// liegende Coverage "unavailable" oder "partial" war. Das ist fachlich
+// falsch: "no-denominator-events" behauptet einen BEWIESENEN Nullnenner —
+// das ist nur zulässig, wenn die Quelle tatsächlich vollständig
+// synchronisiert ist. Bei unvollständiger Coverage ist ein beobachteter
+// Nenner von 0 lediglich ein BEOBACHTETER, nicht belegter Wert — er könnte
+// ebenso gut bedeuten, dass die tatsächlichen Ergebnisse schlicht noch
+// nicht synchronisiert wurden (identisches Prinzip wie bereits in
+// company/marketing-period-metrics.ts: "ein fehlender Record wird nicht als
+// 0 interpretiert"). Coverage besitzt daher jetzt in jedem Fall Vorrang:
+// 1) unavailable Coverage → "unavailable-data", unabhängig vom Nenner.
+// 2) partial Coverage → "partial-data", unabhängig vom Nenner (ein
+//    beobachteter Nenner bleibt als `denominatorCount`/`denominatorEvidenceIds`
+//    sichtbar, aber niemals als "no-denominator-events" behauptet).
+// 3) complete Coverage + Nenner 0 → "no-denominator-events" (jetzt
+//    tatsächlich ein bewiesener Nullnenner).
+// 4) complete Coverage + Nenner > 0 → Maturity entscheidet (unverändert).
 function computeCostMetric(
   numeratorAmountMinor: number | undefined,
   numeratorEvidenceIds: string[],
@@ -369,32 +390,25 @@ function computeCostMetric(
   maturity: CohortMaturityStatus,
 ): CohortCostMetric {
   const denominatorCount = denominatorIds.length;
-
-  if (denominatorCount === 0) {
-    return {
-      availability: "no-denominator-events",
-      maturity,
-      numeratorAmountMinor,
-      denominatorCount: 0,
-      currency: "EUR",
-      numeratorEvidenceIds,
-      denominatorEvidenceIds: [],
-    };
-  }
-
-  const rawAmount = numeratorAmountMinor !== undefined ? Math.round(numeratorAmountMinor / denominatorCount) : undefined;
+  // Division nur, wenn tatsächlich ein Nenner existiert — verhindert
+  // Infinity/NaN unabhängig vom Coverage-Zweig unten.
+  const rawAmount = numeratorAmountMinor !== undefined && denominatorCount > 0 ? Math.round(numeratorAmountMinor / denominatorCount) : undefined;
   const base = { maturity, numeratorAmountMinor, denominatorCount, currency: "EUR" as const, numeratorEvidenceIds, denominatorEvidenceIds: denominatorIds };
 
   if (coverageStatus === "unavailable") {
     // Keine belastbare Abdeckung — auch kein vorläufiger Wert (er wäre nicht
     // einmal als grobe Schätzung vertrauenswürdig, siehe Marketing Period
-    // Metrics für dasselbe Prinzip).
+    // Metrics für dasselbe Prinzip) — UND kein belegter Nullnenner.
     return { ...base, availability: "unavailable-data" };
   }
   if (coverageStatus === "partial") {
     return { ...base, availability: "partial-data", provisionalAmountMinor: rawAmount };
   }
-  // coverageStatus === "complete"
+  // coverageStatus === "complete" — erst hier ist ein beobachteter
+  // Nenner-0-Wert tatsächlich ein bewiesener Nullnenner.
+  if (denominatorCount === 0) {
+    return { ...base, availability: "no-denominator-events" };
+  }
   if (maturity === "mature") {
     return { ...base, availability: "available", amountMinor: rawAmount };
   }

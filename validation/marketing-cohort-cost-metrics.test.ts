@@ -633,9 +633,13 @@ describe("Marketing Cohort Cost Metrics — Maturity (55-63)", () => {
 // Kostenstatus / Availability-Präzedenz (64-71) — mind. 8 K12-Pflichttests
 // ============================================================================
 describe("Marketing Cohort Cost Metrics — Kostenstatus-Präzedenz (64-71)", () => {
-  it("64. no-denominator-events hat Vorrang vor jedem Coverage-/Maturity-Zustand", () => {
+  it("64. [KORREKTURAUFTRAG 'Coverage-First Cost Status Precedence'] Coverage hat Vorrang vor Nenner-Existenz: unavailable Coverage + Nenner 0 ergibt unavailable-data, NICHT no-denominator-events", () => {
+    // Ein beobachteter Nenner von 0 ist bei fehlender Coverage kein
+    // BEWIESENER Nullnenner — er könnte ebenso gut bedeuten, dass die
+    // tatsächlichen Ergebnisse noch nicht synchronisiert wurden.
     const c = generateFull(ASOF, { metaLeadGeneratedEvents: [], coverage: [] }); // sowohl Nenner 0 als auch keine Coverage
-    expect(c.costPerMetaLead.availability).toBe("no-denominator-events");
+    expect(c.costPerMetaLead.availability).toBe("unavailable-data");
+    expect(c.costPerMetaLead.availability).not.toBe("no-denominator-events");
   });
 
   it("65. unavailable-data bei fehlender Coverage trotz vorhandenem Nenner", () => {
@@ -862,11 +866,15 @@ describe("Marketing Cohort Cost Metrics — Source-Specific Coverage Windows (91
     expect(c.costPerWonOpportunity.availability).toBe("unavailable-data");
   });
 
-  it("107. kein Infinity oder NaN, auch bei kombinierter Coverage-Lücke und Nenner 0", () => {
+  it("107. [KORREKTURAUFTRAG 'Coverage-First Cost Status Precedence'] kein Infinity oder NaN, auch bei kombinierter Coverage-Lücke und Nenner 0 — Coverage-Vorrang gilt weiterhin", () => {
     const cov = coverageWithGap("crm-opportunity-lifecycle", "2025-01-15", "2025-01-15", "partial", "2025-01-14", "2025-01-16");
     const c = generateFull(ASOF, { coverage: cov, opportunities: [] });
-    expect(c.costPerWonOpportunity.availability).toBe("no-denominator-events"); // Nenner-Vorrang vor Coverage
+    // partial Coverage hat Vorrang vor dem beobachteten Nullnenner (K2) —
+    // "no-denominator-events" wäre hier ein unbelegter Nullnenner.
+    expect(c.costPerWonOpportunity.availability).toBe("partial-data");
+    expect(c.costPerWonOpportunity.denominatorCount).toBe(0);
     expect(c.costPerWonOpportunity.amountMinor).not.toBe(Infinity);
+    expect(c.costPerWonOpportunity.provisionalAmountMinor).not.toBe(Infinity);
     expect(Number.isNaN(c.costPerWonOpportunity.denominatorCount)).toBe(false);
   });
 
@@ -1023,6 +1031,168 @@ describe("Marketing Cohort Cost Metrics — Regression (111-124)", () => {
     expect(result.yesterday.period).toBe("yesterday");
     expect(result.weekToDate.period).toBe("week-to-date");
     expect(result.monthToDate.period).toBe("month-to-date");
+  });
+});
+
+// ============================================================================
+// Coverage-First Cost Status Precedence (125-148) — KORREKTURAUFTRAG K7,
+// mind. 16 Pflichttests (Domainstatus 1-8, Kostenstufen 9-16)
+// ============================================================================
+describe("Marketing Cohort Cost Metrics — Coverage-First Status Precedence: Domainstatus (125-132)", () => {
+  it("125. unavailable Coverage + Nenner 0 -> unavailable-data", () => {
+    const c = generateFull(ASOF, { metaLeadGeneratedEvents: [], coverage: [] });
+    expect(c.costPerMetaLead.availability).toBe("unavailable-data");
+  });
+
+  it("126. unavailable Coverage + Nenner > 0 -> unavailable-data", () => {
+    const c = generateFull(ASOF, { coverage: [] });
+    expect(c.costPerMetaLead.denominatorCount).toBeGreaterThan(0);
+    expect(c.costPerMetaLead.availability).toBe("unavailable-data");
+  });
+
+  it("127. partial Coverage + Nenner 0 -> partial-data", () => {
+    const partial: MarketingSourceCoverage[] = [
+      coverage("cov-spend-p125", "meta-ad-spend", "2025-01-01", "2025-01-01", "partial"),
+      ...FULL_COVERAGE.filter((c) => c.stream !== "meta-ad-spend"),
+    ];
+    const c = generateFull(ASOF, { metaLeadGeneratedEvents: [], coverage: partial });
+    expect(c.costPerMetaLead.availability).toBe("partial-data");
+    expect(c.costPerMetaLead.denominatorCount).toBe(0);
+  });
+
+  it("128. partial Coverage + Nenner > 0 -> partial-data", () => {
+    const partial: MarketingSourceCoverage[] = [
+      coverage("cov-spend-p126", "meta-ad-spend", "2025-01-01", "2025-01-01", "partial"),
+      ...FULL_COVERAGE.filter((c) => c.stream !== "meta-ad-spend"),
+    ];
+    const c = generateFull(ASOF, { coverage: partial });
+    expect(c.costPerMetaLead.denominatorCount).toBeGreaterThan(0);
+    expect(c.costPerMetaLead.availability).toBe("partial-data");
+  });
+
+  it("129. complete Coverage + Nenner 0 -> no-denominator-events", () => {
+    const c = generateFull(ASOF, { metaLeadGeneratedEvents: [] });
+    expect(c.costPerMetaLead.availability).toBe("no-denominator-events");
+  });
+
+  it("130. complete Coverage + Nenner > 0 + mature -> available", () => {
+    const c = generateFull(ASOF);
+    expect(c.costPerMetaLead.maturity).toBe("mature");
+    expect(c.costPerMetaLead.availability).toBe("available");
+  });
+
+  it("131. complete Coverage + Nenner > 0 + developing -> provisional", () => {
+    // eigene Coverage mit frühem importedAt (2025-01-01) — FULL_COVERAGE ist
+    // erst ab ASOF (2025-06-01) sichtbar, das läge nach dem 84-Tage-Horizont
+    // und würde "developing" nie mit sichtbarer Coverage kombinieren können.
+    const earlyVisibleCoverage = FULL_COVERAGE.map((c) => ({ ...c, importedAt: "2025-01-01" }));
+    const c = generateFull("2025-01-10", { coverage: earlyVisibleCoverage }); // FULL_FC.heldAt=01-08 sichtbar, Alter 9 Tage < 84-Tage-Horizont
+    expect(c.costPerLeadWithFirstCallHeld.denominatorCount).toBeGreaterThan(0);
+    expect(c.costPerLeadWithFirstCallHeld.maturity).toBe("developing");
+    expect(c.costPerLeadWithFirstCallHeld.availability).toBe("provisional");
+  });
+
+  it("132. complete Coverage + Nenner > 0 + indeterminate -> provisional", () => {
+    const c = generateFull(ASOF);
+    expect(c.costPerWonOpportunity.denominatorCount).toBeGreaterThan(0);
+    expect(c.costPerWonOpportunity.maturity).toBe("indeterminate");
+    expect(c.costPerWonOpportunity.availability).toBe("provisional");
+  });
+});
+
+describe("Marketing Cohort Cost Metrics — Coverage-First Status Precedence: je Kostenstufe (133-140)", () => {
+  it("133. CPL mit unavailable Leadgen-Coverage -> unavailable-data", () => {
+    const noLeadgen = FULL_COVERAGE.filter((c) => c.stream !== "meta-lead-generation");
+    const c = generateFull(ASOF, { coverage: noLeadgen });
+    expect(c.costPerMetaLead.availability).toBe("unavailable-data");
+  });
+
+  it("134. CRM-Matched-Kosten mit unavailable CRM-Ingestion-Coverage -> unavailable-data", () => {
+    const noCrm = FULL_COVERAGE.filter((c) => c.stream !== "crm-lead-ingestion");
+    const c = generateFull(ASOF, { coverage: noCrm });
+    expect(c.costPerCrmMatchedLead.availability).toBe("unavailable-data");
+  });
+
+  it("135. First-Call-Kosten mit unavailable Appointment-Coverage -> unavailable-data", () => {
+    const noAppt = FULL_COVERAGE.filter((c) => c.stream !== "crm-sales-appointment-lifecycle");
+    const c = generateFull(ASOF, { coverage: noAppt });
+    expect(c.costPerLeadWithFirstCallBooked.availability).toBe("unavailable-data");
+    expect(c.costPerLeadWithFirstCallHeld.availability).toBe("unavailable-data");
+  });
+
+  it("136. Strategy-Call-Kosten mit unavailable Opportunity-Coverage -> unavailable-data", () => {
+    const noOpp = FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle");
+    const c = generateFull(ASOF, { coverage: noOpp });
+    expect(c.costPerOpportunityWithStrategyCallBooked.availability).toBe("unavailable-data");
+    expect(c.costPerOpportunityWithStrategyCallHeld.availability).toBe("unavailable-data");
+  });
+
+  it("137. Won-Kosten mit unavailable Opportunity-Coverage -> unavailable-data", () => {
+    const noOpp = FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle");
+    const c = generateFull(ASOF, { coverage: noOpp });
+    expect(c.costPerWonOpportunity.availability).toBe("unavailable-data");
+  });
+
+  it("138. Customer-CAC mit unavailable Opportunity-Coverage -> unavailable-data", () => {
+    const noOpp = FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle");
+    const c = generateFull(ASOF, { coverage: noOpp });
+    expect(c.costPerCustomerAcquired.availability).toBe("unavailable-data");
+  });
+
+  it("139. partial Customer-CAC mit Nenner 0 -> partial-data, NICHT no-denominator-events", () => {
+    const partialOpp: MarketingSourceCoverage[] = [
+      coverage("cov-opp-p139", "crm-opportunity-lifecycle", "2025-01-01", "2025-01-01", "partial"),
+      ...FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle"),
+    ];
+    const c = generateFull(ASOF, { coverage: partialOpp, opportunities: [] });
+    expect(c.costPerCustomerAcquired.denominatorCount).toBe(0);
+    expect(c.costPerCustomerAcquired.availability).toBe("partial-data");
+    expect(c.costPerCustomerAcquired.availability).not.toBe("no-denominator-events");
+  });
+
+  it("140. complete Customer-CAC mit Nenner 0 -> no-denominator-events bleibt erreichbar", () => {
+    const c = generateFull(ASOF, { opportunities: [] });
+    expect(c.costPerCustomerAcquired.denominatorCount).toBe(0);
+    expect(c.costPerCustomerAcquired.availability).toBe("no-denominator-events");
+  });
+});
+
+describe("Marketing Cohort Cost Metrics — Coverage-First Status Precedence: keine falsche Null (141-144)", () => {
+  it("141. unavailable Leadgen-Coverage bei beobachteten 0 Leads bleibt unavailable-data, nicht no-result-yet-artig als Nullnenner behauptet", () => {
+    const noLeadgen = FULL_COVERAGE.filter((c) => c.stream !== "meta-lead-generation");
+    const c = generateFull(ASOF, { metaLeadGeneratedEvents: [], coverage: noLeadgen });
+    expect(c.costPerMetaLead.denominatorCount).toBe(0);
+    expect(c.costPerMetaLead.availability).toBe("unavailable-data");
+  });
+
+  it("142. partial Opportunity-Coverage bei beobachteten 0 Customer Acquisitions bleibt partial-data", () => {
+    const partialOpp: MarketingSourceCoverage[] = [
+      coverage("cov-opp-p142", "crm-opportunity-lifecycle", "2025-01-01", "2025-01-01", "partial"),
+      ...FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle"),
+    ];
+    const c = generateFull(ASOF, { coverage: partialOpp, opportunities: [] });
+    expect(c.costPerCustomerAcquired.availability).toBe("partial-data");
+  });
+
+  it("143. complete Opportunity-Coverage bei beobachteten 0 Customer Acquisitions ist korrekt no-denominator-events", () => {
+    const c = generateFull(ASOF, { opportunities: [] });
+    expect(c.costPerCustomerAcquired.availability).toBe("no-denominator-events");
+  });
+
+  it("144. kein Infinity/NaN in keinem der drei Fälle (unavailable/partial/complete, jeweils Nenner 0)", () => {
+    const noLeadgen = FULL_COVERAGE.filter((c) => c.stream !== "meta-lead-generation");
+    const unavailableCase = generateFull(ASOF, { metaLeadGeneratedEvents: [], coverage: noLeadgen });
+    const partialOpp: MarketingSourceCoverage[] = [
+      coverage("cov-opp-p144", "crm-opportunity-lifecycle", "2025-01-01", "2025-01-01", "partial"),
+      ...FULL_COVERAGE.filter((c) => c.stream !== "crm-opportunity-lifecycle"),
+    ];
+    const partialCase = generateFull(ASOF, { coverage: partialOpp, opportunities: [] });
+    const completeCase = generateFull(ASOF, { opportunities: [] });
+    for (const c of [unavailableCase.costPerMetaLead, partialCase.costPerCustomerAcquired, completeCase.costPerCustomerAcquired]) {
+      expect(c.amountMinor).not.toBe(Infinity);
+      expect(c.provisionalAmountMinor).not.toBe(Infinity);
+      expect(Number.isNaN(c.denominatorCount)).toBe(false);
+    }
   });
 });
 
