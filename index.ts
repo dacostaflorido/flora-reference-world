@@ -55,3 +55,32 @@ export type { ScenarioProfile } from "./engine/scenario-profiles";
 export { BASELINE_PROFILE, SCENARIO_PROFILES } from "./engine/scenario-profiles";
 
 export { WORLD_NOW } from "./timeline/world-clock";
+
+// Marketing/Sales Workspace Data Contract (Auftrag "Workspace Contract
+// Checkpoint + Erste sichtbare Marketing/Sales-Unternehmeransicht", Phase I):
+// additiver, UI-fertiger Datenvertrag für Marketing-Kohortenkosten und
+// Sales-Aktivität, jeweils für Gestern/Woche-bis-heute/Monat-bis-heute.
+// Ausschließlich UI-fertige Projektionstypen und der eine schmale
+// Einstiegspunkt werden exportiert — jede zugrunde liegende
+// Berechnungsfunktion (generateMarketingCohortCostMetrics,
+// generateSalesPeriodMetrics, generateCustomerAcquisitionPeriodMetrics,
+// generateMarketingPeriodMetrics, generateAreaWorkspaceData selbst) bleibt
+// bewusst intern — ein Consumer erhält diese Daten ausschließlich über
+// `generateReferenceAreaWorkspaceData()`, wie jeder andere externe
+// Einstiegspunkt dieses Contracts auch. Keine Kennzahl wird hier neu
+// berechnet; siehe company/area-workspace-data.ts für die vollständige
+// Herleitung und Statuspräzedenz.
+export {
+  generateReferenceAreaWorkspaceData,
+  type AreaWorkspaceData,
+  type MarketingWorkspaceData,
+  type SalesWorkspaceData,
+  type MarketingWorkspacePeriod,
+  type SalesWorkspacePeriod,
+  type WorkspacePeriodKey,
+  type WorkspacePeriodBounds,
+  type WorkspaceMetricStatus,
+  type WorkspaceCountMetric,
+  type WorkspaceMoneyMetric,
+  type WorkspaceCostMetric,
+} from "./company/area-workspace-data";

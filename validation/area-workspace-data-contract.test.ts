@@ -580,12 +580,26 @@ describe("Workspace Data Contract — Regression (49-59)", () => {
     expect(a).toEqual(b);
   });
 
-  it("59. Public Contract unverändert: keine neuen Laufzeitsymbole in index.ts", async () => {
+  it("59. [KORREKTURAUFTRAG 'Workspace Contract Checkpoint', Phase I] Public Contract: ausschließlich der autorisierte, schmale Einstiegspunkt ist neu exportiert — der interne Orchestrator selbst bleibt unexportiert", async () => {
     const publicContract = await import("../index");
+    // Der interne Low-Level-Orchestrator (nimmt eine bereits aufgelöste
+    // AreaWorkspaceDataSource entgegen) bleibt bewusst unexportiert — externe
+    // Consumer erhalten ausschließlich den schmalen, selbstständigen
+    // Einstiegspunkt `generateReferenceAreaWorkspaceData` (löst World-Seed/
+    // Profile/asOf selbst auf, siehe company/area-workspace-data.ts).
     expect(publicContract).not.toHaveProperty("generateAreaWorkspaceData");
-    expect(publicContract).not.toHaveProperty("AreaWorkspaceData");
-    expect(publicContract).not.toHaveProperty("MarketingWorkspaceData");
-    expect(publicContract).not.toHaveProperty("SalesWorkspaceData");
+    // Explizit und minimal autorisierte additive Erweiterung (siehe
+    // Abschlussbericht "Workspace Contract Checkpoint + Erste sichtbare
+    // Marketing/Sales-Unternehmeransicht", Phase I):
+    expect(publicContract).toHaveProperty("generateReferenceAreaWorkspaceData");
+    expect(typeof (publicContract as Record<string, unknown>).generateReferenceAreaWorkspaceData).toBe("function");
+  });
+
+  it("60. generateReferenceAreaWorkspaceData liefert ohne Argumente dieselbe Struktur wie der interne Orchestrator (kein Verhaltensunterschied, reiner Verkabelungs-Wrapper)", async () => {
+    const publicContract = (await import("../index")) as typeof import("../index");
+    const viaPublicEntryPoint = publicContract.generateReferenceAreaWorkspaceData();
+    const viaInternalOrchestrator = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(viaPublicEntryPoint).toEqual(viaInternalOrchestrator);
   });
 });
 

@@ -4,6 +4,10 @@ import type { SalesAppointmentBooked, SalesAppointmentHeld } from "../events/sal
 import type { SalesAppointment } from "../world/sales-appointments";
 import type { Opportunity } from "../events/opportunities";
 import type { MarketingSourceCoverage } from "../events/marketing-source-coverage";
+import { WORLD_SEED } from "../engine/seed";
+import { generateScenarioWorld } from "../engine/generator";
+import { BASELINE_PROFILE, type ScenarioProfile } from "../engine/scenario-profiles";
+import { WORLD_NOW } from "../timeline/world-clock";
 import { generateMarketingPeriodMetrics, type MarketingPeriodMetrics, type PeriodMetricValue } from "./marketing-period-metrics";
 import {
   generateMarketingCohortCostMetrics,
@@ -419,4 +423,35 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
       monthToDate: buildSalesWorkspacePeriod("month-to-date", salesPeriod.monthToDate, customerPeriod.monthToDate),
     },
   };
+}
+
+// --- Public Consumer Contract: schmaler externer Einstiegspunkt --------------
+//
+// Additive Erweiterung (Auftrag "Workspace Contract Checkpoint + Erste
+// sichtbare Marketing/Sales-Unternehmeransicht", Phase I) — exakt derselbe
+// World-Resolution-Pfad wie der bereits bestehende externe Einstiegspunkt
+// `generateFullCompanyContext` (company/full-company-context.ts):
+// World-Seed/Scenario-Profile/asOf → `generateScenarioWorld` → unverändertes
+// Durchreichen an `generateAreaWorkspaceData`. Reiner Verkabelungs-Wrapper,
+// keine eigene Berechnung, keine neue Fachlogik — ein externer Consumer
+// (sales-platform) muss dadurch weder den internen ScenarioWorldTruth-Aufbau
+// noch die neun Einzelfelder von `AreaWorkspaceDataSource` selbst kennen.
+export function generateReferenceAreaWorkspaceData(
+  worldSeed: number = WORLD_SEED,
+  profile: ScenarioProfile = BASELINE_PROFILE,
+  asOf: string = WORLD_NOW,
+): AreaWorkspaceData {
+  const scenarioWorld = generateScenarioWorld(worldSeed, profile);
+  const source: AreaWorkspaceDataSource = {
+    metaAdSpendRecords: scenarioWorld.metaAdSpendRecords,
+    metaLeadGeneratedEvents: scenarioWorld.metaLeadGeneratedEvents,
+    marketingCrmLeadIngestedEvents: scenarioWorld.marketingCrmLeadIngestedEvents,
+    marketingLeadIdentityMatchedEvents: scenarioWorld.marketingLeadIdentityMatchedEvents,
+    marketingSourceCoverage: scenarioWorld.marketingSourceCoverage,
+    salesAppointments: scenarioWorld.salesAppointments,
+    salesAppointmentBookedEvents: scenarioWorld.salesAppointmentBookedEvents,
+    salesAppointmentHeldEvents: scenarioWorld.salesAppointmentHeldEvents,
+    opportunities: scenarioWorld.opportunities,
+  };
+  return generateAreaWorkspaceData({ world: source, asOf });
 }
