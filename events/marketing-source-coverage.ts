@@ -19,7 +19,30 @@ import { WORLD_TIMELINE_START, WORLD_NOW } from "../timeline/world-clock";
 // auf ScenarioWorldTruth-Ebene (engine/generator.ts) verfügbar, exakt wie
 // jede andere interne Quellwahrheit, die nicht für externe Consumer bestimmt
 // ist.
-export type MarketingSourceStream = "meta-ad-spend" | "meta-lead-generation" | "crm-lead-ingestion";
+//
+// Korrekturauftrag "Honest Cohort Spend + Maturity + Downstream Coverage"
+// (K6): zwei zusätzliche Streams für die Sales-seitigen Domänen, die bislang
+// fälschlich implizit durch "crm-lead-ingestion"-Coverage mitvertreten
+// wurden — CRM-Lead-Coverage beweist ausschließlich vollständige CRM-Lead-
+// Eingänge, NICHT die Vollständigkeit von Appointment- oder Opportunity-
+// Daten. Beide neuen Streams sind in dieser Referenzwelt bewusst IMMER
+// "complete" über den gesamten Zeitraum: Sales-seitige Daten
+// (SalesAppointment/Opportunity) werden hier deterministisch synchron
+// generiert, ohne jeden Import-/Sync-Lag-Begriff (world/sales-appointments.ts,
+// events/generate-sales-pipeline.ts) — eine erfundene Verzögerung wäre ein
+// nicht belegter Fakt (PRINCIPLES.md: "keine Coverage aus bloß vorhandenen
+// Records erraten"). Der Wert dieser Erweiterung ist rein ARCHITEKTONISCH:
+// sie erzwingt, dass jede Kennzahl ihre TATSÄCHLICH relevante Quelle prüft,
+// statt eine fachlich unpassende Quelle (CRM-Lead-Ingestion) als Ersatz zu
+// missbrauchen — vorbereitet für eine künftige, ehrliche Modellierung
+// echten Sales-Sync-Lags, ohne dass sich an der Architektur etwas ändern
+// müsste.
+export type MarketingSourceStream =
+  | "meta-ad-spend"
+  | "meta-lead-generation"
+  | "crm-lead-ingestion"
+  | "crm-sales-appointment-lifecycle"
+  | "crm-opportunity-lifecycle";
 
 export interface MarketingSourceCoverage {
   id: string;
@@ -145,6 +168,30 @@ export function generateMarketingSourceCoverage(): MarketingSourceCoverage[] {
     ...buildStreamCoverage("meta-ad-spend", "meta", META_AD_SPEND_COMPLETE_LAG_DAYS, "coverage-spend"),
     ...buildStreamCoverage("meta-lead-generation", "meta", META_LEAD_GENERATION_COMPLETE_LAG_DAYS, "coverage-leadgen"),
     ...buildStreamCoverage("crm-lead-ingestion", "crm", CRM_LEAD_INGESTION_COMPLETE_LAG_DAYS, "coverage-crmingest"),
+    // K6: eigene, unabhängig prüfbare Coverage-Fakten für die Sales-seitigen
+    // Domänen — immer "complete" über die gesamte Timeline (siehe
+    // Kopfkommentar für die vollständige Begründung: keine echte
+    // Sync-Verzögerung in dieser Referenzwelt, aber architektonisch
+    // notwendig, damit crm-lead-ingestion-Coverage nicht implizit als Ersatz
+    // für Appointment-/Opportunity-Vollständigkeit missbraucht wird).
+    {
+      id: "coverage-appointment-lifecycle-complete",
+      stream: "crm-sales-appointment-lifecycle",
+      provider: "crm",
+      coveredFrom: WORLD_TIMELINE_START,
+      coveredThrough: WORLD_NOW,
+      importedAt: WORLD_NOW,
+      status: "complete",
+    },
+    {
+      id: "coverage-opportunity-lifecycle-complete",
+      stream: "crm-opportunity-lifecycle",
+      provider: "crm",
+      coveredFrom: WORLD_TIMELINE_START,
+      coveredThrough: WORLD_NOW,
+      importedAt: WORLD_NOW,
+      status: "complete",
+    },
   ];
 }
 
