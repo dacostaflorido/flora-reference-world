@@ -530,12 +530,12 @@ describe("Marketing Cohort Cost Metrics — Won (50-54)", () => {
     expect(at.costPerWonOpportunity.denominatorEvidenceIds).toEqual(["opp-full"]);
   });
 
-  it("52. an keiner Stelle wird Won als Kunde oder CAC bezeichnet", () => {
+  it("52. costPerWonOpportunity wird an keiner Stelle als Kunde oder CAC bezeichnet (bleibt von costPerCustomerAcquired getrennt — Auftrag 'Customer Lifecycle Checkpoint', B8: 'customer'/'CAC' ist jetzt ausschließlich für die eigene, neue Kennzahl erlaubt, niemals für Won)", () => {
     const c = generateFull(ASOF);
-    const json = JSON.stringify(c).toLowerCase();
-    expect(json).not.toContain("cac");
-    expect(json).not.toContain("customer");
-    expect(json).not.toContain("kunde");
+    const wonJson = JSON.stringify(c.costPerWonOpportunity).toLowerCase();
+    expect(wonJson).not.toContain("cac");
+    expect(wonJson).not.toContain("customer");
+    expect(wonJson).not.toContain("kunde");
   });
 
   it("53. ein Nenner von 0 ergibt undefined, niemals Infinity", () => {

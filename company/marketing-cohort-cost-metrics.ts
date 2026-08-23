@@ -12,6 +12,7 @@ import {
   type PeriodDataStatus,
 } from "../events/marketing-source-coverage";
 import { generateMarketingToSalesAttribution, type MarketingLeadAttribution } from "./marketing-sales-attribution";
+import { generateCustomerAcquisitionLifecycle, type CustomerAcquired } from "./customer-acquisition-lifecycle";
 
 // Marketing Cohort Cost Metrics V1, korrigiert durch KORREKTURAUFTRAG "Honest
 // Cohort Spend + Maturity + Downstream Coverage". Rein deskriptiv, keine
@@ -158,6 +159,48 @@ import { generateMarketingToSalesAttribution, type MarketingLeadAttribution } fr
 // bis `asOf` selbst — mehr Gewissheit ist strukturell nicht erreichbar,
 // daher bleibt die Kennzahl auch bei vollständiger Coverage höchstens
 // `"provisional"`, nie `"available"`.
+//
+// --- B5-B10 (Auftrag "Customer Lifecycle Checkpoint + Customer Period
+// Metrics + Cohort CAC V1"): costPerCustomerAcquired ------------------------
+//
+// Achte Kennzahl, additiv zu den bestehenden sieben. Beantwortet NICHT
+// "Kosten pro Won-Opportunity" (das bleibt `costPerWonOpportunity`,
+// unverändert), sondern "Kosten pro tatsächlich NEU akquiriertem Kunden
+// dieser Meta-Lead-Kohorte" — verbindliche Business-Entscheidung: erste
+// Won-Opportunity eines Accounts = Customer Acquisition, jede weitere Won
+// desselben Accounts = Repeat Business (siehe
+// company/customer-acquisition-lifecycle.ts, dort die kanonische, einzige
+// Acquisition-Wahrheit).
+//
+// Zähler: identisch zu jeder anderen Kennzahl dieser Kohorte — der gesamte
+// Meta-Spend der Kohortenperiode (`scope.spendAmountMinor`), unverändert
+// inklusive Null-Lead-Campaign-Spend (K1).
+//
+// Nenner (B6, vollständige Kette, keine Heuristik): für jeden Meta-Lead
+// dieser Kohorte wird über `MarketingLeadIdentityMatched.leadId` der
+// interne Lead aufgelöst (identisch zur bereits bestehenden
+// Attribution-Logik, `attributions[].leadId`). Dieser interne Lead zählt
+// zum Nenner NUR, wenn er exakt der leadId der AKQUIRIERENDEN Opportunity
+// eines `CustomerAcquired`-Events entspricht (`acquisitionByLeadId`, siehe
+// unten — aufgebaut ausschließlich aus `CustomerAcquired.opportunityId` →
+// `Opportunity.leadId`, niemals über Account, Contact, Campaign, Zeit oder
+// Ähnlichkeit). Eine Repeat-Win-Opportunity desselben Accounts hat
+// zwangsläufig eine ANDERE `leadId` (jeder Lead konvertiert zu höchstens
+// einer Opportunity) — ihre leadId ist daher strukturell nie ein Schlüssel
+// von `acquisitionByLeadId` und kann `costPerCustomerAcquired` nicht
+// beeinflussen (B7, Repeat-Win-Schutz — keine Sonderbehandlung nötig, folgt
+// zwingend aus der Datenstruktur).
+//
+// Coverage (B9): identisch zu `costPerWonOpportunity` — Spend/Leadgen über
+// die Kohortenperiode, CRM-Ingestion über das CRM-Match-Fenster,
+// Opportunity-Lifecycle bis `asOf` (Appointment-Coverage wird NICHT
+// benötigt, Acquisition hängt nicht am Strategiegespräch).
+//
+// Maturity (B10): IMMER `"indeterminate"` — Customer Acquisition hängt an
+// Won, und Won besitzt (siehe oben) keinen absoluten Reifehorizont. Damit
+// niemals `amountMinor`, höchstens `provisionalAmountMinor` bei
+// vollständiger Coverage und Nenner > 0 — keine Aussage, dass keine
+// weiteren Kunden aus dieser Kohorte mehr entstehen können.
 
 export type MarketingCohortPeriodKey = "yesterday" | "week-to-date" | "month-to-date" | "reference";
 
@@ -203,6 +246,9 @@ export interface MarketingCohortCampaignBreakdown {
   costPerOpportunityWithStrategyCallBooked: CohortCostMetric;
   costPerOpportunityWithStrategyCallHeld: CohortCostMetric;
   costPerWonOpportunity: CohortCostMetric;
+  // B5-B10: Kosten pro tatsächlich neu akquiriertem Kunden dieser Kohorte
+  // (nur CustomerAcquired-Events, niemals Repeat-Wins) — siehe Kopfkommentar.
+  costPerCustomerAcquired: CohortCostMetric;
 }
 
 export interface MarketingCohort {
@@ -235,6 +281,7 @@ export interface MarketingCohort {
   costPerOpportunityWithStrategyCallBooked: CohortCostMetric;
   costPerOpportunityWithStrategyCallHeld: CohortCostMetric;
   costPerWonOpportunity: CohortCostMetric;
+  costPerCustomerAcquired: CohortCostMetric;
 
   // Activity-Diagnostik (B8/B9, sekundär): Rohnenner, Rebookings zählen
   // mehrfach — bewusst getrennt von den primären Unique-Lead-/Opportunity-
@@ -364,6 +411,25 @@ interface CampaignScope {
   leads: MetaLeadGenerated[];
 }
 
+// B6: baut die einzige erlaubte Zuordnung "interner Lead → akquirierendes
+// CustomerAcquired-Event" — ausschließlich aus `CustomerAcquired.opportunityId`
+// → `Opportunity.leadId`, keine Account-/Contact-/Campaign-/Zeit-Heuristik.
+// Da `customerAcquiredEvents` bereits per Konstruktion nur AKQUIRIERENDE
+// Opportunities referenziert (nie Repeat-Wins, siehe
+// customer-acquisition-lifecycle.ts), enthält diese Map niemals eine
+// Repeat-Win-leadId als Schlüssel (B7).
+function buildAcquisitionByLeadId(customerAcquiredEvents: readonly CustomerAcquired[], opportunities: readonly Opportunity[]): Map<string, CustomerAcquired> {
+  const opportunityById = new Map(opportunities.map((o) => [o.id, o]));
+  const byLeadId = new Map<string, CustomerAcquired>();
+  for (const event of customerAcquiredEvents) {
+    const acquiringOpportunity = opportunityById.get(event.opportunityId);
+    if (acquiringOpportunity) {
+      byLeadId.set(acquiringOpportunity.leadId, event);
+    }
+  }
+  return byLeadId;
+}
+
 function computeSevenMetrics(
   scope: { spendAmountMinor: number; spendRecordIds: string[]; leads: readonly MetaLeadGenerated[] },
   bounds: MarketingCohortBounds,
@@ -372,6 +438,7 @@ function computeSevenMetrics(
   marketingCrmLeadIngestedEvents: readonly MarketingCrmLeadIngested[],
   salesAppointments: readonly SalesAppointment[],
   opportunities: readonly Opportunity[],
+  acquisitionByLeadId: ReadonlyMap<string, CustomerAcquired>,
   coverage: readonly MarketingSourceCoverage[],
 ): {
   costPerMetaLead: CohortCostMetric;
@@ -381,6 +448,7 @@ function computeSevenMetrics(
   costPerOpportunityWithStrategyCallBooked: CohortCostMetric;
   costPerOpportunityWithStrategyCallHeld: CohortCostMetric;
   costPerWonOpportunity: CohortCostMetric;
+  costPerCustomerAcquired: CohortCostMetric;
   attributions: readonly MarketingLeadAttribution[];
 } {
   const { attributions } = generateMarketingToSalesAttribution({
@@ -465,6 +533,23 @@ function computeSevenMetrics(
     numerator, numeratorIds, wonOppIds, wonCoverage, "indeterminate",
   );
 
+  // B5-B10: Customer Acquisition — dieselbe Coverage wie Won (B9: Spend/
+  // Leadgen über die Kohortenperiode, CRM-Ingestion über das CRM-Fenster,
+  // Opportunity-Lifecycle bis `asOf`), aber ein STRIKT engerer Nenner: nur
+  // Meta-Leads dieser Kohorte, deren gematchter interner Lead exakt der
+  // leadId einer AKQUIRIERENDEN Opportunity entspricht (B6). Repeat-Win-
+  // Leads sind strukturell ausgeschlossen (B7, siehe `buildAcquisitionByLeadId`).
+  const customerAcquiredEventIds = [
+    ...new Set(
+      attributions
+        .filter((a) => a.leadId !== undefined && acquisitionByLeadId.has(a.leadId))
+        .map((a) => acquisitionByLeadId.get(a.leadId!)!.id),
+    ),
+  ];
+  const costPerCustomerAcquired = computeCostMetric(
+    numerator, numeratorIds, customerAcquiredEventIds, wonCoverage, "indeterminate",
+  );
+
   return {
     costPerMetaLead,
     costPerCrmMatchedLead,
@@ -473,6 +558,7 @@ function computeSevenMetrics(
     costPerOpportunityWithStrategyCallBooked,
     costPerOpportunityWithStrategyCallHeld,
     costPerWonOpportunity,
+    costPerCustomerAcquired,
     attributions,
   };
 }
@@ -501,6 +587,13 @@ function buildCohort(
   const spendAvailability = resolveMarketingSourceCoverageStatus("meta-ad-spend", bounds, coverage, asOf);
   const leadGenerationAvailability = resolveMarketingSourceCoverageStatus("meta-lead-generation", bounds, coverage, asOf);
 
+  // B5-B10: einmalig für die gesamte Kohorte berechnet (nicht pro
+  // Campaign-Scope, da unabhängig davon, welche Meta-Leads gerade betrachtet
+  // werden) — die kanonische, einzige Customer-Acquisition-Wahrheit, bereits
+  // vollständig As-of-sicher gefiltert (siehe customer-acquisition-lifecycle.ts, B6).
+  const { customerAcquiredEvents } = generateCustomerAcquisitionLifecycle(opportunities, asOf);
+  const acquisitionByLeadId = buildAcquisitionByLeadId(customerAcquiredEvents, opportunities);
+
   // --- K2: Campaign-Level-Aufschlüsselung — Union aus Spend- und Lead-Campaigns
   const campaignScopes = new Map<string, CampaignScope>();
   for (const r of allSpendInCohort) {
@@ -521,7 +614,7 @@ function buildCohort(
     .map((scope) => {
       const metrics = computeSevenMetrics(
         scope, bounds, asOf,
-        marketingLeadIdentityMatchedEvents, marketingCrmLeadIngestedEvents, salesAppointments, opportunities, coverage,
+        marketingLeadIdentityMatchedEvents, marketingCrmLeadIngestedEvents, salesAppointments, opportunities, acquisitionByLeadId, coverage,
       );
       return {
         externalCampaignId: scope.externalCampaignId,
@@ -536,13 +629,14 @@ function buildCohort(
         costPerOpportunityWithStrategyCallBooked: metrics.costPerOpportunityWithStrategyCallBooked,
         costPerOpportunityWithStrategyCallHeld: metrics.costPerOpportunityWithStrategyCallHeld,
         costPerWonOpportunity: metrics.costPerWonOpportunity,
+        costPerCustomerAcquired: metrics.costPerCustomerAcquired,
       };
     });
 
   // --- Gesamt-Level: Σ Spend / Σ Nenner, exakt einmal für die volle Kohorte ----
   const aggregate = computeSevenMetrics(
     { spendAmountMinor, spendRecordIds, leads: cohortLeads }, bounds, asOf,
-    marketingLeadIdentityMatchedEvents, marketingCrmLeadIngestedEvents, salesAppointments, opportunities, coverage,
+    marketingLeadIdentityMatchedEvents, marketingCrmLeadIngestedEvents, salesAppointments, opportunities, acquisitionByLeadId, coverage,
   );
 
   const firstCallBookedEventCount = aggregate.attributions.reduce((sum, a) => sum + a.firstCallAppointmentIds.length, 0);
@@ -568,6 +662,7 @@ function buildCohort(
     costPerOpportunityWithStrategyCallBooked: aggregate.costPerOpportunityWithStrategyCallBooked,
     costPerOpportunityWithStrategyCallHeld: aggregate.costPerOpportunityWithStrategyCallHeld,
     costPerWonOpportunity: aggregate.costPerWonOpportunity,
+    costPerCustomerAcquired: aggregate.costPerCustomerAcquired,
     firstCallBookedEventCount,
     firstCallHeldEventCount,
     strategyCallBookedEventCount,
