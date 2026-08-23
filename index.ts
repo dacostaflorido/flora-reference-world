@@ -70,13 +70,28 @@ export { WORLD_NOW } from "./timeline/world-clock";
 // Einstiegspunkt dieses Contracts auch. Keine Kennzahl wird hier neu
 // berechnet; siehe company/area-workspace-data.ts für die vollständige
 // Herleitung und Statuspräzedenz.
+// Operations Workspace Data Contract (Auftrag "Operations Workspace Data
+// Contract + Entrepreneur View V1", CEO-Freigabe D052): additive Erweiterung
+// von AreaWorkspaceData um rein deskriptive Operations-Transparenz (sieben
+// Kennzahlen: neue Lieferverpflichtungen, tatsächlich gestartete/
+// abgeschlossene Auslieferungen, mediane Wartezeit bis Start, mediane
+// tatsächliche Lieferdauer, eingereihte/laufende Lieferungen am
+// Periodenende). Keine bestehenden Felder geändert, kein Breaking Change.
+// generateOperationsPeriodMetrics bleibt bewusst intern — Consumer erhalten
+// diese Daten ausschließlich über AreaWorkspaceData.operations.
 export {
   generateReferenceAreaWorkspaceData,
   type AreaWorkspaceData,
   type MarketingWorkspaceData,
   type SalesWorkspaceData,
+  type OperationsWorkspaceData,
   type MarketingWorkspacePeriod,
   type SalesWorkspacePeriod,
+  type OperationsWorkspacePeriod,
+  type OperationsWorkspaceActivity,
+  type OperationsWorkspaceDurationMetric,
+  type OperationsWorkspaceDurationFacts,
+  type OperationsWorkspaceStockAtPeriodEnd,
   type WorkspacePeriodKey,
   type WorkspacePeriodBounds,
   type WorkspaceMetricStatus,

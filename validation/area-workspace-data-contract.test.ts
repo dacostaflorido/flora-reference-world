@@ -12,6 +12,8 @@ import { generateSalesPeriodMetrics } from "../company/sales-period-metrics";
 import { generateCustomerAcquisitionPeriodMetrics } from "../company/customer-period-metrics";
 import { generateCustomerAcquisitionLifecycle } from "../company/customer-acquisition-lifecycle";
 import { generateDeliveryUnits } from "../world/delivery-units";
+import { generateOperationsPeriodMetrics } from "../company/operations-period-metrics";
+import { generateFullCompanyContext } from "../company/full-company-context";
 import { EMPLOYEES } from "../world/employees";
 import { EMPLOYEE_HIRED_EVENTS, EMPLOYEE_TERMINATED_EVENTS } from "../events/employee-lifecycle";
 import { CUSTOMER_ACCOUNTS } from "../world/customer-accounts";
@@ -43,6 +45,7 @@ function toWorldSource(): AreaWorkspaceDataSource {
     salesAppointmentBookedEvents: world.salesAppointmentBookedEvents,
     salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     opportunities: world.opportunities,
+    deliveryUnits: world.deliveryUnits,
   };
 }
 
@@ -164,6 +167,12 @@ function fullSource(overrides?: Partial<AreaWorkspaceDataSource>): AreaWorkspace
     salesAppointmentBookedEvents: [FULL_FC_BOOKED, FULL_SC_BOOKED],
     salesAppointmentHeldEvents: [FULL_FC_HELD, FULL_SC_HELD],
     opportunities: [FULL_OPP],
+    // Dieses Fixture prüft ausschließlich die Marketing-/Sales-Kette (siehe
+    // Auftrag "Customer Metrics Checkpoint + Marketing/Sales Workspace Data
+    // Contract V1") — bewusst leer statt eine künstliche, mit FULL_OPP nicht
+    // konsistente DeliveryUnit zu erfinden. Operations-spezifisches Verhalten
+    // wird vollständig in validation/operations-period-metrics.test.ts geprüft.
+    deliveryUnits: [],
     ...overrides,
   };
 }
@@ -684,5 +693,127 @@ describe("Workspace Data Contract — Coverage-First: Referenzwelt (66-70)", () 
     expect(historical.costPerWonOpportunity.denominatorCount).toBe(0);
     expect(historical.costPerWonOpportunity.availability).toBe("no-denominator-events");
     expect(historical.costPerCustomerAcquired.availability).toBe("no-denominator-events");
+  });
+});
+
+// ============================================================================
+// Operations Workspace (Auftrag "Operations Workspace Data Contract +
+// Entrepreneur View V1", D052) — Pflichttests Phase D5: direkte Wertgleichheit,
+// keine zweite Berechnung, Statusprojektion, Zeitsemantik, Evidenz-
+// Weitergabe, Operations State unverändert, Marketing/Sales/Customer
+// unverändert.
+// ============================================================================
+describe("Workspace Data Contract — Operations (71-84)", () => {
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+  const direct = generateOperationsPeriodMetrics(WORLD_NOW, world.deliveryUnits);
+
+  it("71. direkte Wertgleichheit: deliveryCommitmentsCreated entspricht exakt der Domain-Funktion", () => {
+    expect(data.operations.yesterday.activity.deliveryCommitmentsCreated).toBe(
+      direct.yesterday.activity.deliveryCommitmentsCreated,
+    );
+    expect(data.operations.weekToDate.activity.deliveriesStarted).toBe(direct.weekToDate.activity.deliveriesStarted);
+    expect(data.operations.monthToDate.activity.deliveriesCompleted).toBe(
+      direct.monthToDate.activity.deliveriesCompleted,
+    );
+  });
+
+  it("72. direkte Wertgleichheit: Bestand entspricht exakt der Domain-Funktion", () => {
+    expect(data.operations.yesterday.stockAtPeriodEnd.queuedDeliveriesAtPeriodEnd).toBe(
+      direct.yesterday.stockAtPeriodEnd.queuedDeliveriesAtPeriodEnd,
+    );
+    expect(data.operations.yesterday.stockAtPeriodEnd.activeDeliveriesAtPeriodEnd).toBe(
+      direct.yesterday.stockAtPeriodEnd.activeDeliveriesAtPeriodEnd,
+    );
+  });
+
+  it("73. direkte Wertgleichheit: Dauermediane entsprechen exakt der Domain-Funktion", () => {
+    expect(data.operations.yesterday.durationFacts.queueDurationDaysMedianForStartedDeliveries.medianDays).toBe(
+      direct.yesterday.durationFacts.queueDurationDaysMedianForStartedDeliveries.medianDays,
+    );
+  });
+
+  it("74. keine zweite Berechnung: Bounds identisch zur Domain-Funktion", () => {
+    expect(data.operations.yesterday.bounds).toEqual(direct.yesterday.bounds);
+    expect(data.operations.weekToDate.bounds).toEqual(direct.weekToDate.bounds);
+    expect(data.operations.monthToDate.bounds).toEqual(direct.monthToDate.bounds);
+  });
+
+  it("75. Statusprojektion: Dauermetrik mit Population > 0 ist final", () => {
+    const withPopulation = [data.operations.yesterday, data.operations.weekToDate, data.operations.monthToDate].find(
+      (p) => p.durationFacts.queueDurationDaysMedianForStartedDeliveries.population > 0,
+    );
+    expect(withPopulation).toBeDefined();
+    expect(withPopulation!.durationFacts.queueDurationDaysMedianForStartedDeliveries.status).toBe("final");
+  });
+
+  it("76. Statusprojektion: Dauermetrik mit Population = 0 ist no-result-yet, kein erfundener Wert", () => {
+    const zeroPopulation = [data.operations.yesterday, data.operations.weekToDate, data.operations.monthToDate].find(
+      (p) => p.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries.population === 0,
+    );
+    expect(zeroPopulation).toBeDefined();
+    expect(zeroPopulation!.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries.status).toBe(
+      "no-result-yet",
+    );
+    expect(zeroPopulation!.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries.medianDays).toBeUndefined();
+  });
+
+  it("77. Zeitsemantik: Activity ist 'event-activity', Dauerfakten sind 'actual-duration-observation'", () => {
+    expect(data.operations.yesterday.activity.timeSemantics).toBe("event-activity");
+    expect(data.operations.yesterday.durationFacts.timeSemantics).toBe("actual-duration-observation");
+  });
+
+  it("78. Evidence-Weitergabe: Count entspricht exakt der Evidenzlänge (alle drei Perioden)", () => {
+    for (const period of [data.operations.yesterday, data.operations.weekToDate, data.operations.monthToDate]) {
+      expect(period.activity.deliveryCommitmentsCreated).toBe(period.evidence.deliveryCommitmentsCreatedDeliveryUnitIds.length);
+      expect(period.activity.deliveriesStarted).toBe(period.evidence.deliveriesStartedDeliveryUnitIds.length);
+      expect(period.activity.deliveriesCompleted).toBe(period.evidence.deliveriesCompletedDeliveryUnitIds.length);
+      expect(period.stockAtPeriodEnd.queuedDeliveriesAtPeriodEnd).toBe(period.evidence.queuedDeliveriesAtPeriodEndDeliveryUnitIds.length);
+      expect(period.stockAtPeriodEnd.activeDeliveriesAtPeriodEnd).toBe(period.evidence.activeDeliveriesAtPeriodEndDeliveryUnitIds.length);
+    }
+  });
+
+  it("79. Evidence-Weitergabe: Dauermetrik-Evidenz entspricht exakt der Population", () => {
+    for (const period of [data.operations.yesterday, data.operations.weekToDate, data.operations.monthToDate]) {
+      expect(period.durationFacts.queueDurationDaysMedianForStartedDeliveries.population).toBe(
+        period.durationFacts.queueDurationDaysMedianForStartedDeliveries.evidenceIds.length,
+      );
+      expect(period.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries.population).toBe(
+        period.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries.evidenceIds.length,
+      );
+    }
+  });
+
+  it("80. Operations State bleibt unverändert: state=null, evaluationStatus='unzureichende-evidenz'", () => {
+    const { executiveContext } = generateFullCompanyContext();
+    const operationsSummary = executiveContext.areaSummaries.find((a) => a.key === "operations")!;
+    expect(operationsSummary.state).toBeNull();
+    expect(operationsSummary.evaluationStatus).toBe("unzureichende-evidenz");
+  });
+
+  it("81. Marketing bleibt durch die Operations-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(before.marketing).toEqual(data.marketing);
+  });
+
+  it("82. Sales bleibt durch die Operations-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(before.sales).toEqual(data.sales);
+  });
+
+  it("83. keine SLA-/Termintreue-/Leistungsbewertungssprache im gesamten Operations-Workspace-Ausschnitt", () => {
+    const serialized = JSON.stringify(data.operations);
+    for (const forbidden of [/sla/i, /pünktlich/i, /verspätet/i, /planabweichung/i, /engpass/i, /überlastung/i]) {
+      expect(forbidden.test(serialized)).toBe(false);
+    }
+  });
+
+  it("84. Public Contract additiv: index.ts exportiert die neuen Operations-Typen, bestehende Exporte bleiben erhalten", async () => {
+    const publicContract = (await import("../index")) as Record<string, unknown>;
+    expect(typeof publicContract.generateReferenceAreaWorkspaceData).toBe("function");
+    expect(typeof publicContract.generateFullCompanyContext).toBe("function");
+    const referenceData = (publicContract.generateReferenceAreaWorkspaceData as () => AreaWorkspaceData)();
+    expect(referenceData.operations).toBeDefined();
+    expect(referenceData.marketing).toBeDefined();
+    expect(referenceData.sales).toBeDefined();
   });
 });

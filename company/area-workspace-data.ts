@@ -17,6 +17,12 @@ import {
 } from "./marketing-cohort-cost-metrics";
 import { generateSalesPeriodMetrics, type SalesPeriodMetrics } from "./sales-period-metrics";
 import { generateCustomerAcquisitionPeriodMetrics, type CustomerAcquisitionPeriodMetric } from "./customer-period-metrics";
+import {
+  generateOperationsPeriodMetrics,
+  type OperationsPeriodMetrics,
+  type OperationsDurationMetric,
+} from "./operations-period-metrics";
+import type { DeliveryUnit } from "../world/delivery-units";
 
 // Marketing/Sales Workspace Data Contract V1 (Auftrag "Customer Metrics
 // Checkpoint + Marketing/Sales Workspace Data Contract V1", Phase B) — ein
@@ -301,10 +307,81 @@ export interface SalesWorkspaceData {
   monthToDate: SalesWorkspacePeriod;
 }
 
+// --- Operations Workspace (Auftrag "Operations Workspace Data Contract +
+// Entrepreneur View V1", D052) ------------------------------------------------
+//
+// Activity- und Bestandszahlen bleiben bewusst PLAIN number (kein
+// WorkspaceCountMetric-Wrapper) — exakt dieselbe, bereits etablierte
+// Begründung wie bei SalesWorkspacePeriod oben: Operations-Daten werden in
+// dieser Referenzwelt strukturell immer vollständig/deterministisch erzeugt
+// (kein Coverage-Fakt existiert für DeliveryUnits, siehe
+// events/marketing-source-coverage.ts, MarketingSourceStream — Operations ist
+// dort nicht enthalten), ein Wrapper würde eine Unvollständigkeit
+// vortäuschen, die nicht existiert. Dauermetriken erhalten dagegen einen
+// eigenen Status: eine leere Population (N=0) ist ehrlich "no-result-yet",
+// niemals ein erfundener Nullwert — dieselbe Bedeutung wie bei
+// WorkspaceCostMetric mit availability="no-denominator-events".
+export interface OperationsWorkspaceActivity {
+  timeSemantics: "event-activity";
+  deliveryCommitmentsCreated: number;
+  deliveriesStarted: number;
+  deliveriesCompleted: number;
+}
+
+export interface OperationsWorkspaceDurationMetric {
+  status: WorkspaceMetricStatus;
+  medianDays?: number;
+  minDays?: number;
+  maxDays?: number;
+  population: number;
+  evidenceIds: string[];
+}
+
+export interface OperationsWorkspaceDurationFacts {
+  // Eigene Zeitsemantik (B8-Muster): Queue-Dauer misst Commitment→Ist-Start,
+  // Delivery-Dauer misst Ist-Start→Ist-Abschluss — beides bereits
+  // eingetretene, tatsächliche Beobachtungen, keine Zusage, kein SLA, keine
+  // Planabweichung (es existiert kein plannedEndDate in diesem Modell).
+  timeSemantics: "actual-duration-observation";
+  queueDurationDaysMedianForStartedDeliveries: OperationsWorkspaceDurationMetric;
+  deliveryDurationDaysMedianForCompletedDeliveries: OperationsWorkspaceDurationMetric;
+}
+
+export interface OperationsWorkspaceStockAtPeriodEnd {
+  queuedDeliveriesAtPeriodEnd: number;
+  activeDeliveriesAtPeriodEnd: number;
+}
+
+export interface OperationsWorkspacePeriod {
+  period: WorkspacePeriodKey;
+  bounds: WorkspacePeriodBounds;
+  activity: OperationsWorkspaceActivity;
+  durationFacts: OperationsWorkspaceDurationFacts;
+  // Bestand ist keine Aktivität und bleibt strukturell getrennt (B6) —
+  // ausgewertet exakt zu bounds.through, nicht zu asOf (siehe
+  // company/operations-period-metrics.ts für die vollständige Begründung).
+  stockAtPeriodEnd: OperationsWorkspaceStockAtPeriodEnd;
+  evidence: {
+    deliveryCommitmentsCreatedDeliveryUnitIds: string[];
+    deliveriesStartedDeliveryUnitIds: string[];
+    deliveriesCompletedDeliveryUnitIds: string[];
+    queuedDeliveriesAtPeriodEndDeliveryUnitIds: string[];
+    activeDeliveriesAtPeriodEndDeliveryUnitIds: string[];
+  };
+}
+
+export interface OperationsWorkspaceData {
+  asOf: string;
+  yesterday: OperationsWorkspacePeriod;
+  weekToDate: OperationsWorkspacePeriod;
+  monthToDate: OperationsWorkspacePeriod;
+}
+
 export interface AreaWorkspaceData {
   asOf: string;
   marketing: MarketingWorkspaceData;
   sales: SalesWorkspaceData;
+  operations: OperationsWorkspaceData;
 }
 
 export interface AreaWorkspaceDataSource {
@@ -317,6 +394,7 @@ export interface AreaWorkspaceDataSource {
   salesAppointmentBookedEvents: readonly SalesAppointmentBooked[];
   salesAppointmentHeldEvents: readonly SalesAppointmentHeld[];
   opportunities: readonly Opportunity[];
+  deliveryUnits: readonly DeliveryUnit[];
 }
 
 function buildMarketingWorkspacePeriod(period: WorkspacePeriodKey, asOf: string, activity: MarketingPeriodMetrics, cohort: MarketingCohort): MarketingWorkspacePeriod {
@@ -381,7 +459,51 @@ function buildSalesWorkspacePeriod(period: WorkspacePeriodKey, sales: SalesPerio
   };
 }
 
-// B2/B3: einzige Orchestrierungsstelle — ruft jede der vier kanonischen
+function toOperationsWorkspaceDurationMetric(source: OperationsDurationMetric): OperationsWorkspaceDurationMetric {
+  return {
+    status: source.population > 0 ? "final" : "no-result-yet",
+    medianDays: source.medianDays,
+    minDays: source.minDays,
+    maxDays: source.maxDays,
+    population: source.population,
+    evidenceIds: source.deliveryUnitIds,
+  };
+}
+
+function buildOperationsWorkspacePeriod(period: WorkspacePeriodKey, operations: OperationsPeriodMetrics): OperationsWorkspacePeriod {
+  return {
+    period,
+    bounds: operations.bounds,
+    activity: {
+      timeSemantics: "event-activity",
+      deliveryCommitmentsCreated: operations.activity.deliveryCommitmentsCreated,
+      deliveriesStarted: operations.activity.deliveriesStarted,
+      deliveriesCompleted: operations.activity.deliveriesCompleted,
+    },
+    durationFacts: {
+      timeSemantics: "actual-duration-observation",
+      queueDurationDaysMedianForStartedDeliveries: toOperationsWorkspaceDurationMetric(
+        operations.durationFacts.queueDurationDaysMedianForStartedDeliveries,
+      ),
+      deliveryDurationDaysMedianForCompletedDeliveries: toOperationsWorkspaceDurationMetric(
+        operations.durationFacts.deliveryDurationDaysMedianForCompletedDeliveries,
+      ),
+    },
+    stockAtPeriodEnd: {
+      queuedDeliveriesAtPeriodEnd: operations.stockAtPeriodEnd.queuedDeliveriesAtPeriodEnd,
+      activeDeliveriesAtPeriodEnd: operations.stockAtPeriodEnd.activeDeliveriesAtPeriodEnd,
+    },
+    evidence: {
+      deliveryCommitmentsCreatedDeliveryUnitIds: operations.activity.deliveryCommitmentsCreatedDeliveryUnitIds,
+      deliveriesStartedDeliveryUnitIds: operations.activity.deliveriesStartedDeliveryUnitIds,
+      deliveriesCompletedDeliveryUnitIds: operations.activity.deliveriesCompletedDeliveryUnitIds,
+      queuedDeliveriesAtPeriodEndDeliveryUnitIds: operations.stockAtPeriodEnd.queuedDeliveriesAtPeriodEndDeliveryUnitIds,
+      activeDeliveriesAtPeriodEndDeliveryUnitIds: operations.stockAtPeriodEnd.activeDeliveriesAtPeriodEndDeliveryUnitIds,
+    },
+  };
+}
+
+// B2/B3: einzige Orchestrierungsstelle — ruft jede der fünf kanonischen
 // Domain-Funktionen genau einmal auf und projiziert ausschließlich deren
 // bereits vorhandene Felder.
 export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSource; asOf: string }): AreaWorkspaceData {
@@ -407,6 +529,7 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
   });
   const salesPeriod = generateSalesPeriodMetrics(asOf, world.salesAppointmentBookedEvents, world.salesAppointmentHeldEvents, world.opportunities);
   const customerPeriod = generateCustomerAcquisitionPeriodMetrics(world.opportunities, asOf);
+  const operationsPeriod = generateOperationsPeriodMetrics(asOf, world.deliveryUnits);
 
   return {
     asOf,
@@ -421,6 +544,12 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
       yesterday: buildSalesWorkspacePeriod("yesterday", salesPeriod.yesterday, customerPeriod.yesterday),
       weekToDate: buildSalesWorkspacePeriod("week-to-date", salesPeriod.weekToDate, customerPeriod.weekToDate),
       monthToDate: buildSalesWorkspacePeriod("month-to-date", salesPeriod.monthToDate, customerPeriod.monthToDate),
+    },
+    operations: {
+      asOf,
+      yesterday: buildOperationsWorkspacePeriod("yesterday", operationsPeriod.yesterday),
+      weekToDate: buildOperationsWorkspacePeriod("week-to-date", operationsPeriod.weekToDate),
+      monthToDate: buildOperationsWorkspacePeriod("month-to-date", operationsPeriod.monthToDate),
     },
   };
 }
@@ -452,6 +581,7 @@ export function generateReferenceAreaWorkspaceData(
     salesAppointmentBookedEvents: scenarioWorld.salesAppointmentBookedEvents,
     salesAppointmentHeldEvents: scenarioWorld.salesAppointmentHeldEvents,
     opportunities: scenarioWorld.opportunities,
+    deliveryUnits: scenarioWorld.deliveryUnits,
   };
   return generateAreaWorkspaceData({ world: source, asOf });
 }
