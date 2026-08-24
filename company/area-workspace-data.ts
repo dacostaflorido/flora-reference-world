@@ -25,6 +25,15 @@ import {
 import type { DeliveryUnit } from "../world/delivery-units";
 import { generatePeoplePeriodMetrics, type PeoplePeriodMetrics } from "./people-period-metrics";
 import { EMPLOYEES, type Employee } from "../world/employees";
+import {
+  generateCompanyCapabilitySnapshot,
+  type CompanyCapabilitySnapshot,
+  type AreaCapability,
+  type ExecutiveDecisionPoint,
+} from "./company-capability";
+import type { CompanyExecutiveContextSnapshot } from "./company-executive-context";
+import { generateFullCompanyContext } from "./full-company-context";
+import type { CompanyAreaKey } from "./company-area";
 
 // Marketing/Sales Workspace Data Contract V1 (Auftrag "Customer Metrics
 // Checkpoint + Marketing/Sales Workspace Data Contract V1", Phase B) — ein
@@ -428,12 +437,46 @@ export interface PeopleWorkspaceData {
   monthToDate: PeopleWorkspacePeriod;
 }
 
+// --- Executive Workspace (Auftrag "Company Capability Evidence Audit +
+// Executive Decision View V1", D054) ------------------------------------------
+//
+// Reine Weiterreichung von CompanyCapabilitySnapshot (company-capability.ts)
+// — keine Neuberechnung im Workspace Layer. `AreaCapability`/
+// `ExecutiveDecisionPoint` werden unverändert wiederverwendet statt eigener
+// Workspace-Kopien: beide sind bereits UI-fertig (ausschließlich Strings,
+// Enums, Evidence-ID-Listen — keine internen Roh-Event-Arrays, kein RNG-
+// Zustand), anders als z. B. Operations/Marketing, deren Domain-Typen erst in
+// Money-/Count-/Status-Wrapper übersetzt werden mussten. Die vier flachen
+// Summary-Felder (knownFacts/attentionAreas/insufficientEvidenceAreas) werden
+// aus `CompanyCapabilitySnapshot.summary` auf oberste Ebene herausgezogen —
+// exakt die im Auftrag empfohlene flache Struktur.
+export interface ExecutiveWorkspaceData {
+  asOf: string;
+  capabilities: AreaCapability[];
+  knownFacts: string[];
+  attentionAreas: CompanyAreaKey[];
+  insufficientEvidenceAreas: CompanyAreaKey[];
+  decisionPoints: ExecutiveDecisionPoint[];
+}
+
+function buildExecutiveWorkspaceData(capability: CompanyCapabilitySnapshot): ExecutiveWorkspaceData {
+  return {
+    asOf: capability.asOf,
+    capabilities: capability.capabilities,
+    knownFacts: capability.summary.knownFacts,
+    attentionAreas: capability.summary.attentionAreas,
+    insufficientEvidenceAreas: capability.summary.insufficientEvidenceAreas,
+    decisionPoints: capability.decisionPoints,
+  };
+}
+
 export interface AreaWorkspaceData {
   asOf: string;
   marketing: MarketingWorkspaceData;
   sales: SalesWorkspaceData;
   operations: OperationsWorkspaceData;
   people: PeopleWorkspaceData;
+  executive: ExecutiveWorkspaceData;
 }
 
 export interface AreaWorkspaceDataSource {
@@ -583,8 +626,12 @@ function buildPeopleWorkspacePeriod(period: WorkspacePeriodKey, people: PeoplePe
 // B2/B3: einzige Orchestrierungsstelle — ruft jede der fünf kanonischen
 // Domain-Funktionen genau einmal auf und projiziert ausschließlich deren
 // bereits vorhandene Felder.
-export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSource; asOf: string }): AreaWorkspaceData {
-  const { world, asOf } = params;
+export function generateAreaWorkspaceData(params: {
+  world: AreaWorkspaceDataSource;
+  asOf: string;
+  executiveContext: CompanyExecutiveContextSnapshot;
+}): AreaWorkspaceData {
+  const { world, asOf, executiveContext } = params;
 
   const marketingPeriod = generateMarketingPeriodMetrics(
     asOf,
@@ -608,6 +655,7 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
   const customerPeriod = generateCustomerAcquisitionPeriodMetrics(world.opportunities, asOf);
   const operationsPeriod = generateOperationsPeriodMetrics(asOf, world.deliveryUnits);
   const peoplePeriod = generatePeoplePeriodMetrics(asOf, world.employees);
+  const capability = generateCompanyCapabilitySnapshot(executiveContext);
 
   return {
     asOf,
@@ -635,6 +683,7 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
       weekToDate: buildPeopleWorkspacePeriod("week-to-date", peoplePeriod.weekToDate),
       monthToDate: buildPeopleWorkspacePeriod("month-to-date", peoplePeriod.monthToDate),
     },
+    executive: buildExecutiveWorkspaceData(capability),
   };
 }
 
@@ -674,5 +723,18 @@ export function generateReferenceAreaWorkspaceData(
     // (`employees: EMPLOYEES`).
     employees: EMPLOYEES,
   };
-  return generateAreaWorkspaceData({ world: source, asOf });
+  // Executive-Ebene (D054): benötigt CompanyExecutiveContextSnapshot, das
+  // ausschließlich über den bereits bestehenden generateFullCompanyContext-
+  // Pfad (World → Snapshot → Sales Ground Truth/Business State/Executive
+  // Context → Company Context, siehe full-company-context.ts) erzeugt werden
+  // kann — dieselbe, bereits vollständig getestete Verkabelung, hier nur ein
+  // zweites Mal mit denselben Parametern aufgerufen (worldSeed/profile/asOf),
+  // nicht neu gebaut. `generateScenarioWorld` ist eine reine, deterministische
+  // Funktion (siehe PRINCIPLES.md) — ein zweiter Aufruf mit identischen
+  // Parametern liefert bit-identische Ergebnisse, keine zweite Wahrheit,
+  // dieselbe bereits bestehende Duplikation, die heute schon zwischen
+  // `generateReferenceAreaWorkspaceData` und `generateFullCompanyContext` als
+  // zwei unabhängigen Public-Contract-Einstiegspunkten besteht.
+  const { executiveContext } = generateFullCompanyContext(worldSeed, profile, asOf);
+  return generateAreaWorkspaceData({ world: source, asOf, executiveContext });
 }

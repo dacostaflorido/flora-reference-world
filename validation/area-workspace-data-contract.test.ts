@@ -6,6 +6,9 @@ import {
   type AreaWorkspaceDataSource,
   type AreaWorkspaceData,
 } from "../company/area-workspace-data";
+import { generateCompanyCapabilitySnapshot } from "../company/company-capability";
+import type { CompanyExecutiveContextSnapshot } from "../company/company-executive-context";
+import type { CompanyAreaSummary } from "../company/company-area";
 import { generateMarketingPeriodMetrics } from "../company/marketing-period-metrics";
 import { generateMarketingCohortCostMetrics, generateMarketingCohortForBounds } from "../company/marketing-cohort-cost-metrics";
 import { generateSalesPeriodMetrics } from "../company/sales-period-metrics";
@@ -48,6 +51,45 @@ function toWorldSource(): AreaWorkspaceDataSource {
     opportunities: world.opportunities,
     deliveryUnits: world.deliveryUnits,
     employees: EMPLOYEES,
+  };
+}
+
+// Executive-Ebene (D054): jeder generateAreaWorkspaceData-Aufruf benötigt
+// seit dieser Erweiterung zusätzlich einen CompanyExecutiveContextSnapshot.
+// REAL_EXECUTIVE_CONTEXT ist der echte, bereits an anderer Stelle getestete
+// WORLD_NOW-Kontext (siehe validation/company-capability.test.ts für die
+// dedizierte Prüfung) — für alle Tests, die mit toWorldSource()/WORLD_NOW
+// arbeiten. neutralExecutiveContext(asOf) ist ein reines, hier lokales
+// Fixture (alle vier Areas unzureichende-evidenz) für die synthetischen
+// fullSource()-Fixtures dieser Datei, die ausschließlich Marketing-/Sales-
+// Mechanik prüfen und keine Executive-Aussage benötigen — der `asOf`-Wert
+// wird bewusst 1:1 übernommen, damit `AreaWorkspaceData.asOf` und
+// `AreaWorkspaceData.executive.asOf` niemals auseinanderfallen.
+const REAL_EXECUTIVE_CONTEXT: CompanyExecutiveContextSnapshot = generateFullCompanyContext().executiveContext;
+
+function neutralAreaSummary(key: CompanyAreaSummary["key"]): CompanyAreaSummary {
+  return {
+    key,
+    kind: key === "people" ? "cross-cutting-dimension" : "department",
+    state: null,
+    evaluationStatus: "unzureichende-evidenz",
+    statement: null,
+    topObservations: [],
+    relevantMetrics: {},
+    evidenceIds: [],
+  };
+}
+
+function neutralExecutiveContext(asOf: string): CompanyExecutiveContextSnapshot {
+  return {
+    id: "cexec-fixture",
+    timestamp: asOf,
+    companyBusinessStateId: "cbstate-fixture",
+    affectedAreas: [],
+    areaSummaries: (["sales", "marketing", "people", "operations"] as const).map(neutralAreaSummary),
+    topSituations: [],
+    crossAreaLinks: [],
+    insufficientEvidenceAreas: ["sales", "marketing", "people", "operations"],
   };
 }
 
@@ -184,7 +226,7 @@ function fullSource(overrides?: Partial<AreaWorkspaceDataSource>): AreaWorkspace
 }
 
 function generateFullData(asOf: string, overrides?: Partial<AreaWorkspaceDataSource>): AreaWorkspaceData {
-  return generateAreaWorkspaceData({ world: fullSource(overrides), asOf });
+  return generateAreaWorkspaceData({ world: fullSource(overrides), asOf, executiveContext: neutralExecutiveContext(asOf) });
 }
 
 // ============================================================================
@@ -192,14 +234,14 @@ function generateFullData(asOf: string, overrides?: Partial<AreaWorkspaceDataSou
 // ============================================================================
 describe("Workspace Data Contract — Orchestrierung (1-7)", () => {
   it("1. verwendet die bestehende Marketing Period API unverändert (identische Werte)", () => {
-    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     const direct = generateMarketingPeriodMetrics(WORLD_NOW, world.metaAdSpendRecords, world.metaLeadGeneratedEvents, world.marketingCrmLeadIngestedEvents, world.marketingLeadIdentityMatchedEvents, world.marketingSourceCoverage);
     expect(data.marketing.monthToDate.activity.metaSpend.observedAmountMinor).toBe(direct.monthToDate.activity.metaSpendAmountMinor.observedValue);
     expect(data.marketing.monthToDate.activity.metaLeadsGenerated.evidenceIds).toEqual(direct.monthToDate.activity.evidence.metaLeadGeneratedEventIds);
   });
 
   it("2. verwendet die bestehende Cohort Cost API unverändert (identische Werte)", () => {
-    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     const direct = generateMarketingCohortCostMetrics({
       asOf: WORLD_NOW,
       metaAdSpendRecords: world.metaAdSpendRecords,
@@ -215,7 +257,7 @@ describe("Workspace Data Contract — Orchestrierung (1-7)", () => {
   });
 
   it("3. verwendet die bestehende Sales Period API unverändert (identische Werte)", () => {
-    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     const direct = generateSalesPeriodMetrics(WORLD_NOW, world.salesAppointmentBookedEvents, world.salesAppointmentHeldEvents, world.opportunities);
     expect(data.sales.monthToDate.firstCallsBooked).toBe(direct.monthToDate.firstCallsBooked);
     expect(data.sales.monthToDate.wonOpportunities).toBe(direct.monthToDate.wonOpportunities);
@@ -223,7 +265,7 @@ describe("Workspace Data Contract — Orchestrierung (1-7)", () => {
   });
 
   it("4. verwendet die bestehende Customer Period API unverändert (identische Werte)", () => {
-    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     const direct = generateCustomerAcquisitionPeriodMetrics(world.opportunities, WORLD_NOW);
     expect(data.sales.monthToDate.customersAcquired).toBe(direct.monthToDate.customersAcquired);
     expect(data.sales.monthToDate.evidence.customerAcquiredEventIds).toEqual(direct.monthToDate.customerAcquiredEventIds);
@@ -342,7 +384,7 @@ describe("Workspace Data Contract — Sales (17-23)", () => {
 
   it("23. Customer und Won bleiben getrennte Felder, auch bei einem Repeat-Win", () => {
     const repeatOpp = won("opp-repeat", "account-full", "lead-repeat-x", "2025-02-05", "2025-02-10");
-    const data = generateAreaWorkspaceData({ world: fullSource({ opportunities: [FULL_OPP, repeatOpp] }), asOf: "2025-02-10" });
+    const data = generateAreaWorkspaceData({ world: fullSource({ opportunities: [FULL_OPP, repeatOpp] }), asOf: "2025-02-10", executiveContext: neutralExecutiveContext("2025-02-10") });
     expect(data.sales.monthToDate.wonOpportunities).toBe(1); // nur opp-repeat liegt im Februar (MTD)
     expect(data.sales.monthToDate.customersAcquired).toBe(0); // opp-repeat ist Repeat Business, keine Acquisition
   });
@@ -372,25 +414,25 @@ describe("Workspace Data Contract — Status (24-32)", () => {
 
   it("27. partial Coverage ergibt partial-data", () => {
     const partialCoverage = FULL_COVERAGE.map((c) => (c.stream === "meta-ad-spend" ? coverage("cov-spend-p", "meta-ad-spend", "2025-01-01", "2025-01-01", "partial") : c));
-    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: partialCoverage }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: partialCoverage }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.activity.metaSpend.status).toBe("partial-data");
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("partial-data");
   });
 
   it("28. unavailable Coverage ergibt unavailable", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.activity.metaSpend.status).toBe("unavailable");
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("unavailable");
   });
 
   it("29. Nenner 0 ergibt no-result-yet, nicht 0 €", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("no-result-yet");
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.amountMinor).toBeUndefined();
   });
 
   it("30. keine falsche Null: bei unavailable Coverage bleibt amountMinor undefined, niemals fälschlich 0", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.activity.metaSpend.status).toBe("unavailable");
     expect(data.marketing.monthToDate.activity.metaSpend.amountMinor).toBeUndefined();
     // observedAmountMinor bleibt der tatsächlich beobachtete Rohwert (10000,
@@ -400,13 +442,13 @@ describe("Workspace Data Contract — Status (24-32)", () => {
   });
 
   it("31. kein Infinity in irgendeiner Kostenkennzahl", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.amountMinor).not.toBe(Infinity);
     expect(data.marketing.monthToDate.cohortCosts.costPerCustomerAcquired.provisionalAmountMinor).not.toBe(Infinity);
   });
 
   it("32. kein NaN in irgendeiner Kostenkennzahl", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(Number.isNaN(data.marketing.monthToDate.cohortCosts.costPerMetaLead.denominatorCount)).toBe(false);
   });
 });
@@ -590,8 +632,8 @@ describe("Workspace Data Contract — Regression (49-59)", () => {
   });
 
   it("58. RNG unverändert: der Workspace-Vertrag ist eine reine Funktion ohne eigenen Zufallsstrom", () => {
-    const a = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
-    const b = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const a = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+    const b = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(a).toEqual(b);
   });
 
@@ -613,7 +655,7 @@ describe("Workspace Data Contract — Regression (49-59)", () => {
   it("60. generateReferenceAreaWorkspaceData liefert ohne Argumente dieselbe Struktur wie der interne Orchestrator (kein Verhaltensunterschied, reiner Verkabelungs-Wrapper)", async () => {
     const publicContract = (await import("../index")) as typeof import("../index");
     const viaPublicEntryPoint = publicContract.generateReferenceAreaWorkspaceData();
-    const viaInternalOrchestrator = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const viaInternalOrchestrator = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(viaPublicEntryPoint).toEqual(viaInternalOrchestrator);
   });
 });
@@ -624,18 +666,18 @@ describe("Workspace Data Contract — Regression (49-59)", () => {
 // ============================================================================
 describe("Workspace Data Contract — Coverage-First: Workspace-Mapping (60-65)", () => {
   it("60. unavailable-data wird als unavailable projiziert", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("unavailable");
   });
 
   it("61. partial-data wird als partial-data projiziert", () => {
     const partialCoverage = FULL_COVERAGE.map((c) => (c.stream === "meta-ad-spend" ? coverage("cov-spend-p61", "meta-ad-spend", "2025-01-01", "2025-01-01", "partial", "2025-01-01") : c));
-    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: partialCoverage }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ marketingSourceCoverage: partialCoverage }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("partial-data");
   });
 
   it("62. no-denominator-events wird als no-result-yet projiziert", () => {
-    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF });
+    const data = generateAreaWorkspaceData({ world: fullSource({ metaLeadGeneratedEvents: [] }), asOf: ASOF, executiveContext: neutralExecutiveContext(ASOF) });
     expect(data.marketing.monthToDate.cohortCosts.costPerMetaLead.status).toBe("no-result-yet");
   });
 
@@ -664,7 +706,7 @@ describe("Workspace Data Contract — Coverage-First: Workspace-Mapping (60-65)"
 });
 
 describe("Workspace Data Contract — Coverage-First: Referenzwelt (66-70)", () => {
-  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
 
   it("66. Yesterday-Kosten sind bei partial Spend-/Leadgen-Coverage ehrlich partial-data, NICHT fälschlich no-result-yet", () => {
     expect(data.marketing.yesterday.activity.metaSpend.status).toBe("partial-data");
@@ -710,7 +752,7 @@ describe("Workspace Data Contract — Coverage-First: Referenzwelt (66-70)", () 
 // unverändert.
 // ============================================================================
 describe("Workspace Data Contract — Operations (71-84)", () => {
-  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
   const direct = generateOperationsPeriodMetrics(WORLD_NOW, world.deliveryUnits);
 
   it("71. direkte Wertgleichheit: deliveryCommitmentsCreated entspricht exakt der Domain-Funktion", () => {
@@ -797,12 +839,12 @@ describe("Workspace Data Contract — Operations (71-84)", () => {
   });
 
   it("81. Marketing bleibt durch die Operations-Erweiterung unverändert", () => {
-    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(before.marketing).toEqual(data.marketing);
   });
 
   it("82. Sales bleibt durch die Operations-Erweiterung unverändert", () => {
-    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(before.sales).toEqual(data.sales);
   });
 
@@ -825,7 +867,7 @@ describe("Workspace Data Contract — Operations (71-84)", () => {
 });
 
 describe("Workspace Data Contract — People (85-99)", () => {
-  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
   const direct = generatePeoplePeriodMetrics(WORLD_NOW, EMPLOYEES);
 
   it("85. direkte Wertgleichheit: Aktivität entspricht exakt der Domain-Funktion (alle drei Perioden)", () => {
@@ -856,7 +898,7 @@ describe("Workspace Data Contract — People (85-99)", () => {
   });
 
   it("88. genau eine kanonische Berechnung: zwei unabhängige generateAreaWorkspaceData-Aufrufe liefern identisches people", () => {
-    const again = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const again = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(again.people).toEqual(data.people);
   });
 
@@ -903,17 +945,17 @@ describe("Workspace Data Contract — People (85-99)", () => {
   });
 
   it("95. Marketing bleibt durch die People-Erweiterung unverändert", () => {
-    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(before.marketing).toEqual(data.marketing);
   });
 
   it("96. Sales bleibt durch die People-Erweiterung unverändert", () => {
-    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(before.sales).toEqual(data.sales);
   });
 
   it("97. Operations bleibt durch die People-Erweiterung unverändert", () => {
-    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
     expect(before.operations).toEqual(data.operations);
   });
 
@@ -940,6 +982,95 @@ describe("Workspace Data Contract — People (85-99)", () => {
   it("99. Public Contract additiv: index.ts exportiert die neuen People-Typen, bestehende Exporte bleiben erhalten", async () => {
     const publicContract = (await import("../index")) as Record<string, unknown>;
     const referenceData = (publicContract.generateReferenceAreaWorkspaceData as () => AreaWorkspaceData)();
+    expect(referenceData.people).toBeDefined();
+    expect(referenceData.operations).toBeDefined();
+    expect(referenceData.marketing).toBeDefined();
+    expect(referenceData.sales).toBeDefined();
+  });
+});
+
+describe("Workspace Data Contract — Executive (100-113)", () => {
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+  const direct = generateCompanyCapabilitySnapshot(REAL_EXECUTIVE_CONTEXT);
+
+  it("100. direkte Wertgleichheit: capabilities entspricht exakt der Domain-Funktion", () => {
+    expect(data.executive.capabilities).toEqual(direct.capabilities);
+  });
+
+  it("101. direkte Wertgleichheit: decisionPoints entspricht exakt der Domain-Funktion", () => {
+    expect(data.executive.decisionPoints).toEqual(direct.decisionPoints);
+  });
+
+  it("102. direkte Wertgleichheit: knownFacts/attentionAreas/insufficientEvidenceAreas entspricht der Domain-Summary", () => {
+    expect(data.executive.knownFacts).toEqual(direct.summary.knownFacts);
+    expect(data.executive.attentionAreas).toEqual(direct.summary.attentionAreas);
+    expect(data.executive.insufficientEvidenceAreas).toEqual(direct.summary.insufficientEvidenceAreas);
+  });
+
+  it("103. keine zweite Berechnung: zwei unabhängige generateAreaWorkspaceData-Aufrufe liefern identisches executive", () => {
+    const again = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+    expect(again.executive).toEqual(data.executive);
+  });
+
+  it("104. alle vier Bereiche sind in capabilities vertreten", () => {
+    const areas = data.executive.capabilities.map((c) => c.area).sort();
+    expect(areas).toEqual(["marketing", "operations", "people", "sales"]);
+  });
+
+  it("105. asOf fällt niemals zwischen AreaWorkspaceData und dem Executive-Ausschnitt auseinander", () => {
+    expect(data.executive.asOf).toBe(data.asOf);
+    expect(data.executive.asOf).toBe(WORLD_NOW);
+  });
+
+  it("106. Evidence-ID-Integrität: jede Capability und jeder Entscheidungspunkt trägt eine evidenceIds-Liste", () => {
+    for (const capability of data.executive.capabilities) {
+      expect(Array.isArray(capability.evidenceIds)).toBe(true);
+    }
+    for (const decisionPoint of data.executive.decisionPoints) {
+      expect(Array.isArray(decisionPoint.evidenceIds)).toBe(true);
+    }
+  });
+
+  it("107. keine Entscheidung ohne Auslöser: jeder Entscheidungspunkt gehört zu einer 'attention-required'-Capability", () => {
+    for (const decisionPoint of data.executive.decisionPoints) {
+      const capability = data.executive.capabilities.find((c) => c.area === decisionPoint.area);
+      expect(capability?.status).toBe("attention-required");
+    }
+  });
+
+  it("108. keine automatische Entscheidung: jeder Entscheidungspunkt bleibt 'open', niemals automatisch ausgeführt", () => {
+    for (const decisionPoint of data.executive.decisionPoints) {
+      expect(decisionPoint.decisionStatus).toBe("open");
+    }
+  });
+
+  it("109. Marketing bleibt durch die Executive-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+    expect(before.marketing).toEqual(data.marketing);
+  });
+
+  it("110. Sales bleibt durch die Executive-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+    expect(before.sales).toEqual(data.sales);
+  });
+
+  it("111. Operations und People bleiben durch die Executive-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW, executiveContext: REAL_EXECUTIVE_CONTEXT });
+    expect(before.operations).toEqual(data.operations);
+    expect(before.people).toEqual(data.people);
+  });
+
+  it("112. kein Gesamtscore, keine Prozentzahl, keine Ampel, keine Schulnote im gesamten Executive-Ausschnitt", () => {
+    const serialized = JSON.stringify(data.executive);
+    for (const forbidden of [/score/i, /gesamtnote/i, /prozent/i, /percentage/i, /ampel/i, /trafficlight/i, /sternebewertung/i]) {
+      expect(forbidden.test(serialized)).toBe(false);
+    }
+  });
+
+  it("113. Public Contract additiv: index.ts exportiert die neuen Executive-Typen, bestehende Exporte bleiben erhalten", async () => {
+    const publicContract = (await import("../index")) as Record<string, unknown>;
+    const referenceData = (publicContract.generateReferenceAreaWorkspaceData as () => AreaWorkspaceData)();
+    expect(referenceData.executive).toBeDefined();
     expect(referenceData.people).toBeDefined();
     expect(referenceData.operations).toBeDefined();
     expect(referenceData.marketing).toBeDefined();

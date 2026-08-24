@@ -87,6 +87,17 @@ export { WORLD_NOW } from "./timeline/world-clock";
 // geändert, kein Breaking Change. generatePeoplePeriodMetrics bleibt bewusst
 // intern — Consumer erhalten diese Daten ausschließlich über
 // AreaWorkspaceData.people. Keine Namen, keine Ranking-/Performance-Felder.
+// Company Capability + Executive Decision View (Auftrag "Company Capability
+// Evidence Audit + Executive Decision View V1", CEO-Freigabe D054): additive
+// Erweiterung von AreaWorkspaceData um eine rein projektive, bereichsüber-
+// greifende Fähigkeits- und Entscheidungssicht (vier Area-Capabilities,
+// regelbasierte Executive Summary, offene Entscheidungspunkte). Berechnet
+// keine neuen Geschäftsfakten — jedes Feld ist eine reine Ableitung
+// bestehender CompanyAreaSummary-Felder (state/evaluationStatus/statement/
+// evidenceIds/topObservations). Kein Gesamtscore, keine automatische
+// Entscheidung. generateCompanyCapabilitySnapshot bleibt bewusst intern —
+// Consumer erhalten diese Daten ausschließlich über
+// AreaWorkspaceData.executive.
 export {
   generateReferenceAreaWorkspaceData,
   type AreaWorkspaceData,
@@ -94,6 +105,7 @@ export {
   type SalesWorkspaceData,
   type OperationsWorkspaceData,
   type PeopleWorkspaceData,
+  type ExecutiveWorkspaceData,
   type MarketingWorkspacePeriod,
   type SalesWorkspacePeriod,
   type OperationsWorkspacePeriod,
@@ -111,3 +123,12 @@ export {
   type WorkspaceMoneyMetric,
   type WorkspaceCostMetric,
 } from "./company/area-workspace-data";
+
+export {
+  type CapabilityStatus,
+  type AreaCapability,
+  type ExecutiveDecisionUrgency,
+  type ExecutiveDecisionPoint,
+  type ExecutiveSummary,
+  type CompanyCapabilitySnapshot,
+} from "./company/company-capability";
