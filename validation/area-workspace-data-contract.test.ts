@@ -13,6 +13,7 @@ import { generateCustomerAcquisitionPeriodMetrics } from "../company/customer-pe
 import { generateCustomerAcquisitionLifecycle } from "../company/customer-acquisition-lifecycle";
 import { generateDeliveryUnits } from "../world/delivery-units";
 import { generateOperationsPeriodMetrics } from "../company/operations-period-metrics";
+import { generatePeoplePeriodMetrics } from "../company/people-period-metrics";
 import { generateFullCompanyContext } from "../company/full-company-context";
 import { EMPLOYEES } from "../world/employees";
 import { EMPLOYEE_HIRED_EVENTS, EMPLOYEE_TERMINATED_EVENTS } from "../events/employee-lifecycle";
@@ -46,6 +47,7 @@ function toWorldSource(): AreaWorkspaceDataSource {
     salesAppointmentHeldEvents: world.salesAppointmentHeldEvents,
     opportunities: world.opportunities,
     deliveryUnits: world.deliveryUnits,
+    employees: EMPLOYEES,
   };
 }
 
@@ -173,6 +175,10 @@ function fullSource(overrides?: Partial<AreaWorkspaceDataSource>): AreaWorkspace
     // konsistente DeliveryUnit zu erfinden. Operations-spezifisches Verhalten
     // wird vollständig in validation/operations-period-metrics.test.ts geprüft.
     deliveryUnits: [],
+    // Dieselbe Begründung wie bei deliveryUnits oben — People-spezifisches
+    // Verhalten wird vollständig in validation/people-period-metrics.test.ts
+    // geprüft, dieses Fixture bewusst ohne Employees.
+    employees: [],
     ...overrides,
   };
 }
@@ -812,6 +818,129 @@ describe("Workspace Data Contract — Operations (71-84)", () => {
     expect(typeof publicContract.generateReferenceAreaWorkspaceData).toBe("function");
     expect(typeof publicContract.generateFullCompanyContext).toBe("function");
     const referenceData = (publicContract.generateReferenceAreaWorkspaceData as () => AreaWorkspaceData)();
+    expect(referenceData.operations).toBeDefined();
+    expect(referenceData.marketing).toBeDefined();
+    expect(referenceData.sales).toBeDefined();
+  });
+});
+
+describe("Workspace Data Contract — People (85-99)", () => {
+  const data = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+  const direct = generatePeoplePeriodMetrics(WORLD_NOW, EMPLOYEES);
+
+  it("85. direkte Wertgleichheit: Aktivität entspricht exakt der Domain-Funktion (alle drei Perioden)", () => {
+    expect(data.people.yesterday.activity.hires).toBe(direct.yesterday.activity.hires);
+    expect(data.people.weekToDate.activity.hires).toBe(direct.weekToDate.activity.hires);
+    expect(data.people.monthToDate.activity.hires).toBe(direct.monthToDate.activity.hires);
+    expect(data.people.yesterday.activity.terminations).toBe(direct.yesterday.activity.terminations);
+    expect(data.people.weekToDate.activity.terminations).toBe(direct.weekToDate.activity.terminations);
+    expect(data.people.monthToDate.activity.terminations).toBe(direct.monthToDate.activity.terminations);
+  });
+
+  it("86. direkte Wertgleichheit: Bestand entspricht exakt der Domain-Funktion (alle drei Perioden)", () => {
+    for (const [period, directPeriod] of [
+      [data.people.yesterday, direct.yesterday],
+      [data.people.weekToDate, direct.weekToDate],
+      [data.people.monthToDate, direct.monthToDate],
+    ] as const) {
+      expect(period.stockAtPeriodEnd.headcount).toBe(directPeriod.stockAtPeriodEnd.headcount);
+      expect(period.stockAtPeriodEnd.staffedResponsibilityAreas).toBe(directPeriod.stockAtPeriodEnd.staffedResponsibilityAreas);
+      expect(period.stockAtPeriodEnd.unstaffedResponsibilityAreas).toBe(directPeriod.stockAtPeriodEnd.unstaffedResponsibilityAreas);
+    }
+  });
+
+  it("87. keine zweite Berechnung: Bounds identisch zur Domain-Funktion", () => {
+    expect(data.people.yesterday.bounds).toEqual(direct.yesterday.bounds);
+    expect(data.people.weekToDate.bounds).toEqual(direct.weekToDate.bounds);
+    expect(data.people.monthToDate.bounds).toEqual(direct.monthToDate.bounds);
+  });
+
+  it("88. genau eine kanonische Berechnung: zwei unabhängige generateAreaWorkspaceData-Aufrufe liefern identisches people", () => {
+    const again = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(again.people).toEqual(data.people);
+  });
+
+  it("89. alle freigegebenen People-Kennzahlen sind vorhanden (Headcount, Eintritte, Austritte, besetzte/unbesetzte Verantwortungsbereiche)", () => {
+    const yesterday = data.people.yesterday;
+    expect(typeof yesterday.activity.hires).toBe("number");
+    expect(typeof yesterday.activity.terminations).toBe("number");
+    expect(typeof yesterday.stockAtPeriodEnd.headcount).toBe("number");
+    expect(typeof yesterday.stockAtPeriodEnd.staffedResponsibilityAreas).toBe("number");
+    expect(typeof yesterday.stockAtPeriodEnd.unstaffedResponsibilityAreas).toBe("number");
+  });
+
+  it("90. Zeitsemantik: Activity ist 'event-activity'", () => {
+    expect(data.people.yesterday.activity.timeSemantics).toBe("event-activity");
+    expect(data.people.weekToDate.activity.timeSemantics).toBe("event-activity");
+    expect(data.people.monthToDate.activity.timeSemantics).toBe("event-activity");
+  });
+
+  it("91. Evidence-Weitergabe: Count entspricht exakt der Evidenzlänge (alle drei Perioden)", () => {
+    for (const period of [data.people.yesterday, data.people.weekToDate, data.people.monthToDate]) {
+      expect(period.activity.hires).toBe(period.evidence.hiresEmployeeIds.length);
+      expect(period.activity.terminations).toBe(period.evidence.terminationsEmployeeIds.length);
+      expect(period.stockAtPeriodEnd.headcount).toBe(period.evidence.headcountEmployeeIds.length);
+      expect(period.stockAtPeriodEnd.staffedResponsibilityAreas).toBe(period.evidence.staffedResponsibilityAreaKeys.length);
+      expect(period.stockAtPeriodEnd.unstaffedResponsibilityAreas).toBe(period.evidence.unstaffedResponsibilityAreaKeys.length);
+    }
+  });
+
+  it("92. echter Count von 0 bleibt 0 (Eintritte/Austritte bei WORLD_NOW, keine erfundene Zahl)", () => {
+    expect(data.people.yesterday.activity.hires).toBe(0);
+    expect(data.people.yesterday.activity.terminations).toBe(0);
+    expect(data.people.yesterday.evidence.hiresEmployeeIds).toEqual([]);
+  });
+
+  it("93. Headcount bei WORLD_NOW entspricht exakt der bereits an anderer Stelle getesteten Baseline (38)", () => {
+    expect(data.people.yesterday.stockAtPeriodEnd.headcount).toBe(38);
+  });
+
+  it("94. People State bleibt unverändert: state='ausgeglichen', evaluationStatus='bewertet' (keine automatische State-Änderung allein durch die neuen Kennzahlen)", () => {
+    const { executiveContext } = generateFullCompanyContext();
+    const peopleSummary = executiveContext.areaSummaries.find((a) => a.key === "people")!;
+    expect(peopleSummary.state).toBe("ausgeglichen");
+    expect(peopleSummary.evaluationStatus).toBe("bewertet");
+  });
+
+  it("95. Marketing bleibt durch die People-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(before.marketing).toEqual(data.marketing);
+  });
+
+  it("96. Sales bleibt durch die People-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(before.sales).toEqual(data.sales);
+  });
+
+  it("97. Operations bleibt durch die People-Erweiterung unverändert", () => {
+    const before = generateAreaWorkspaceData({ world: toWorldSource(), asOf: WORLD_NOW });
+    expect(before.operations).toEqual(data.operations);
+  });
+
+  it("98. keine Namen, keine Ranking-/Performance-/Abwesenheitssprache im gesamten People-Workspace-Ausschnitt", () => {
+    const serialized = JSON.stringify(data.people);
+    for (const forbidden of [
+      /rank/i,
+      /score/i,
+      /performance/i,
+      /isTopPerformer/i,
+      /abwesen/i,
+      /krank/i,
+      /urlaub/i,
+      /burnout/i,
+      /kündigungsrisiko/i,
+    ]) {
+      expect(forbidden.test(serialized)).toBe(false);
+    }
+    for (const name of ["Jonas", "Katharina", "Fabian", "Svenja"]) {
+      expect(serialized.includes(name)).toBe(false);
+    }
+  });
+
+  it("99. Public Contract additiv: index.ts exportiert die neuen People-Typen, bestehende Exporte bleiben erhalten", async () => {
+    const publicContract = (await import("../index")) as Record<string, unknown>;
+    const referenceData = (publicContract.generateReferenceAreaWorkspaceData as () => AreaWorkspaceData)();
+    expect(referenceData.people).toBeDefined();
     expect(referenceData.operations).toBeDefined();
     expect(referenceData.marketing).toBeDefined();
     expect(referenceData.sales).toBeDefined();

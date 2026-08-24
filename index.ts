@@ -79,19 +79,31 @@ export { WORLD_NOW } from "./timeline/world-clock";
 // Periodenende). Keine bestehenden Felder geändert, kein Breaking Change.
 // generateOperationsPeriodMetrics bleibt bewusst intern — Consumer erhalten
 // diese Daten ausschließlich über AreaWorkspaceData.operations.
+// People Workspace Data Contract (Auftrag "People Intelligence Governance +
+// Evidence Audit + Workspace V1", CEO-Freigabe D053): additive Erweiterung
+// von AreaWorkspaceData um rein deskriptive People-Transparenz (Eintritte/
+// Austritte im Zeitraum, Mitarbeiterbestand sowie besetzte/unbesetzte
+// Verantwortungsbereiche am Periodenende). Keine bestehenden Felder
+// geändert, kein Breaking Change. generatePeoplePeriodMetrics bleibt bewusst
+// intern — Consumer erhalten diese Daten ausschließlich über
+// AreaWorkspaceData.people. Keine Namen, keine Ranking-/Performance-Felder.
 export {
   generateReferenceAreaWorkspaceData,
   type AreaWorkspaceData,
   type MarketingWorkspaceData,
   type SalesWorkspaceData,
   type OperationsWorkspaceData,
+  type PeopleWorkspaceData,
   type MarketingWorkspacePeriod,
   type SalesWorkspacePeriod,
   type OperationsWorkspacePeriod,
+  type PeopleWorkspacePeriod,
   type OperationsWorkspaceActivity,
   type OperationsWorkspaceDurationMetric,
   type OperationsWorkspaceDurationFacts,
   type OperationsWorkspaceStockAtPeriodEnd,
+  type PeopleWorkspaceActivity,
+  type PeopleWorkspaceStockAtPeriodEnd,
   type WorkspacePeriodKey,
   type WorkspacePeriodBounds,
   type WorkspaceMetricStatus,

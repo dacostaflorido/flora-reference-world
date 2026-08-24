@@ -23,6 +23,8 @@ import {
   type OperationsDurationMetric,
 } from "./operations-period-metrics";
 import type { DeliveryUnit } from "../world/delivery-units";
+import { generatePeoplePeriodMetrics, type PeoplePeriodMetrics } from "./people-period-metrics";
+import { EMPLOYEES, type Employee } from "../world/employees";
 
 // Marketing/Sales Workspace Data Contract V1 (Auftrag "Customer Metrics
 // Checkpoint + Marketing/Sales Workspace Data Contract V1", Phase B) — ein
@@ -377,11 +379,61 @@ export interface OperationsWorkspaceData {
   monthToDate: OperationsWorkspacePeriod;
 }
 
+// --- People Workspace (Auftrag "People Intelligence Governance + Evidence
+// Audit + Workspace V1", D053) ------------------------------------------------
+//
+// Aktivitäts- und Bestandszahlen bleiben bewusst PLAIN number (kein
+// WorkspaceCountMetric-Wrapper) — exakt dieselbe, bereits etablierte
+// Begründung wie bei SalesWorkspacePeriod/OperationsWorkspaceActivity oben:
+// People-Daten (Employee-Stammdaten) werden in dieser Referenzwelt strukturell
+// immer vollständig/deterministisch erzeugt (kein Coverage-Fakt existiert für
+// Employees, siehe events/marketing-source-coverage.ts, MarketingSourceStream
+// — People ist dort nicht enthalten), ein Wrapper würde eine Unvollständigkeit
+// vortäuschen, die nicht existiert. Kein Dauer-/Median-Konzept in diesem
+// Bereich (anders als Operations) — daher kein WorkspaceMetricStatus hier.
+export interface PeopleWorkspaceActivity {
+  timeSemantics: "event-activity";
+  hires: number;
+  terminations: number;
+}
+
+export interface PeopleWorkspaceStockAtPeriodEnd {
+  headcount: number;
+  staffedResponsibilityAreas: number;
+  unstaffedResponsibilityAreas: number;
+}
+
+export interface PeopleWorkspacePeriod {
+  period: WorkspacePeriodKey;
+  bounds: WorkspacePeriodBounds;
+  activity: PeopleWorkspaceActivity;
+  // Bestand ist keine Aktivität und bleibt strukturell getrennt (dasselbe
+  // Muster wie Operations) — ausgewertet exakt zu bounds.through, nicht zu
+  // asOf (siehe company/people-period-metrics.ts für die vollständige
+  // Begründung).
+  stockAtPeriodEnd: PeopleWorkspaceStockAtPeriodEnd;
+  evidence: {
+    hiresEmployeeIds: string[];
+    terminationsEmployeeIds: string[];
+    headcountEmployeeIds: string[];
+    staffedResponsibilityAreaKeys: string[];
+    unstaffedResponsibilityAreaKeys: string[];
+  };
+}
+
+export interface PeopleWorkspaceData {
+  asOf: string;
+  yesterday: PeopleWorkspacePeriod;
+  weekToDate: PeopleWorkspacePeriod;
+  monthToDate: PeopleWorkspacePeriod;
+}
+
 export interface AreaWorkspaceData {
   asOf: string;
   marketing: MarketingWorkspaceData;
   sales: SalesWorkspaceData;
   operations: OperationsWorkspaceData;
+  people: PeopleWorkspaceData;
 }
 
 export interface AreaWorkspaceDataSource {
@@ -395,6 +447,7 @@ export interface AreaWorkspaceDataSource {
   salesAppointmentHeldEvents: readonly SalesAppointmentHeld[];
   opportunities: readonly Opportunity[];
   deliveryUnits: readonly DeliveryUnit[];
+  employees: readonly Employee[];
 }
 
 function buildMarketingWorkspacePeriod(period: WorkspacePeriodKey, asOf: string, activity: MarketingPeriodMetrics, cohort: MarketingCohort): MarketingWorkspacePeriod {
@@ -503,6 +556,30 @@ function buildOperationsWorkspacePeriod(period: WorkspacePeriodKey, operations: 
   };
 }
 
+function buildPeopleWorkspacePeriod(period: WorkspacePeriodKey, people: PeoplePeriodMetrics): PeopleWorkspacePeriod {
+  return {
+    period,
+    bounds: people.bounds,
+    activity: {
+      timeSemantics: "event-activity",
+      hires: people.activity.hires,
+      terminations: people.activity.terminations,
+    },
+    stockAtPeriodEnd: {
+      headcount: people.stockAtPeriodEnd.headcount,
+      staffedResponsibilityAreas: people.stockAtPeriodEnd.staffedResponsibilityAreas,
+      unstaffedResponsibilityAreas: people.stockAtPeriodEnd.unstaffedResponsibilityAreas,
+    },
+    evidence: {
+      hiresEmployeeIds: people.activity.hiresEmployeeIds,
+      terminationsEmployeeIds: people.activity.terminationsEmployeeIds,
+      headcountEmployeeIds: people.stockAtPeriodEnd.headcountEmployeeIds,
+      staffedResponsibilityAreaKeys: people.stockAtPeriodEnd.staffedResponsibilityAreaKeys,
+      unstaffedResponsibilityAreaKeys: people.stockAtPeriodEnd.unstaffedResponsibilityAreaKeys,
+    },
+  };
+}
+
 // B2/B3: einzige Orchestrierungsstelle — ruft jede der fünf kanonischen
 // Domain-Funktionen genau einmal auf und projiziert ausschließlich deren
 // bereits vorhandene Felder.
@@ -530,6 +607,7 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
   const salesPeriod = generateSalesPeriodMetrics(asOf, world.salesAppointmentBookedEvents, world.salesAppointmentHeldEvents, world.opportunities);
   const customerPeriod = generateCustomerAcquisitionPeriodMetrics(world.opportunities, asOf);
   const operationsPeriod = generateOperationsPeriodMetrics(asOf, world.deliveryUnits);
+  const peoplePeriod = generatePeoplePeriodMetrics(asOf, world.employees);
 
   return {
     asOf,
@@ -550,6 +628,12 @@ export function generateAreaWorkspaceData(params: { world: AreaWorkspaceDataSour
       yesterday: buildOperationsWorkspacePeriod("yesterday", operationsPeriod.yesterday),
       weekToDate: buildOperationsWorkspacePeriod("week-to-date", operationsPeriod.weekToDate),
       monthToDate: buildOperationsWorkspacePeriod("month-to-date", operationsPeriod.monthToDate),
+    },
+    people: {
+      asOf,
+      yesterday: buildPeopleWorkspacePeriod("yesterday", peoplePeriod.yesterday),
+      weekToDate: buildPeopleWorkspacePeriod("week-to-date", peoplePeriod.weekToDate),
+      monthToDate: buildPeopleWorkspacePeriod("month-to-date", peoplePeriod.monthToDate),
     },
   };
 }
@@ -582,6 +666,13 @@ export function generateReferenceAreaWorkspaceData(
     salesAppointmentHeldEvents: scenarioWorld.salesAppointmentHeldEvents,
     opportunities: scenarioWorld.opportunities,
     deliveryUnits: scenarioWorld.deliveryUnits,
+    // EMPLOYEES ist scenario-unabhängig (statisches Organigramm, siehe
+    // world/employees.ts und engine/generator.ts) und deshalb bewusst NICHT
+    // Teil von ScenarioWorldTruth — anders als deliveryUnits oben, das direkt
+    // aus dem statischen, importierten EMPLOYEES-Datensatz gespeist wird,
+    // exakt derselbe Bezug wie bereits in company/full-company-context.ts
+    // (`employees: EMPLOYEES`).
+    employees: EMPLOYEES,
   };
   return generateAreaWorkspaceData({ world: source, asOf });
 }
