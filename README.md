@@ -81,6 +81,49 @@ Freigabe — siehe `PRINCIPLES.md`, Prinzip 2.
   beliebigen Zeitpunkt innerhalb der Timeline (nicht nur WORLD_NOW)
 - `validation/` — automatisierte Prüfung der Invarianten
 
+## Reference Company Public Export Contract V1
+
+Additiver, deterministischer Export-Snapshot für einen nachgelagerten Consumer, der ein
+vollständiges, referenziell konsistentes Datenpaket aus der bestehenden kanonischen
+Referenzwelt (Elbfeld Software GmbH, synthetische B2B-SaaS-Referenzfirma) benötigt —
+z. B. für einen künftigen CSV-Export. Kein neuer Geschäftsfakt, keine neue Berechnung:
+ruft ausschließlich bereits bestehende, an anderer Stelle geprüfte Generatoren auf.
+
+```ts
+import { generateReferenceCompanyExportSnapshot } from "flora-reference-world";
+
+const snapshot = generateReferenceCompanyExportSnapshot(); // Baseline, WORLD_NOW
+// oder explizit:
+const earlier = generateReferenceCompanyExportSnapshot(WORLD_SEED, BASELINE_PROFILE, "2024-07-01");
+```
+
+Enthält: `company`, `roles`, `departments`, `employees`, `marketingCampaigns`,
+`metaAdSpendRecords`, `metaLeadGeneratedEvents`, `marketingCrmLeadIngestedEvents`,
+`marketingLeadIdentityMatchedEvents`, `leads`, `customerAccounts`, `appointments`,
+`opportunities`, `customerAcquiredEvents`, `customerRelationships`,
+`wonOpportunityClassifications`, `deliveryUnits`.
+
+- **`asOf`**: alle Collections stammen aus demselben World-Stand und demselben `asOf`
+  (Default `WORLD_NOW`); kein Datensatz liegt zeitlich nach `asOf`. Das gilt
+  ausdrücklich auch für `appointments`: `statusAsOf`/`scheduledForAsOf`/`heldAt`
+  werden über die bereits bestehende, kanonische Funktion `appointmentStatusAt`
+  (world/sales-appointments.ts) ausschließlich aus den bis `asOf` sichtbaren
+  Booked-/Rescheduled-/Cancelled-/NoShow-/Held-Ereignissen abgeleitet — kein
+  zukünftiger Statuswechsel leakt in einen historischen Snapshot.
+- **Determinismus**: identischer `worldSeed` + `asOf` liefert bit-identische Daten bei
+  jedem Aufruf.
+- **Sortierung**: jede Collection ist stabil aufsteigend nach ihrer Primär-ID sortiert.
+- **Stabilität**: der Rückgabewert ist zur Laufzeit vollständig eingefroren
+  (`Object.freeze` auf allen Ebenen) — eine Mutation verändert die kanonische
+  Referenzwelt nicht.
+- **Datenschutzgrenze**: keine Contact-Datensätze (Contact.name ist eine synthetische
+  Personenbezeichnung), keine Employee-Namen, keine Performance-Markierungen
+  (`isTopPerformer`, `capacityThreshold`) — nur strukturelle, nicht-personenbezogene
+  Felder.
+
+Elbfeld Software GmbH ist eine vollständig synthetische B2B-SaaS-Referenzfirma (siehe
+„Elbfeld-Abgrenzung" oben) — kein reales Unternehmen.
+
 ## Voraussetzungen
 
 Node.js >=24, pnpm 11.18.0.

@@ -132,3 +132,25 @@ export {
   type ExecutiveSummary,
   type CompanyCapabilitySnapshot,
 } from "./company/company-capability";
+
+// Reference Company Public Export Contract V1 (Auftrag "Flora Reference World
+// Public Export Contract V1"): additiver, deterministischer Export-Snapshot
+// für einen nachgelagerten Consumer, der ein vollständiges, referenziell
+// konsistentes Datenpaket aus der bestehenden kanonischen Referenzwelt
+// (Elbfeld Software GmbH) benötigt — z. B. für einen künftigen CSV-Export.
+// Ruft ausschließlich bereits bestehende, an anderer Stelle geprüfte
+// Generatoren auf (World/Scenario → Snapshot → Customer Acquisition
+// Lifecycle); berechnet keinen neuen Geschäftsfakt, verändert keine
+// bestehende Rückgabesemantik. Enthält bewusst keine personenbezogenen
+// Daten (kein Contact[], keine Employee-Namen, keine Performance-
+// Markierungen — siehe company/reference-company-export.ts). Rückgabewert
+// ist zur Laufzeit vollständig eingefroren (Object.freeze auf allen Ebenen)
+// — eine Mutation des Rückgabewerts verändert die kanonische Referenzwelt
+// nicht. generateReferenceCompanyExportSnapshot ist der einzige Einstiegspunkt;
+// alle darunterliegenden Generatoren bleiben bewusst intern.
+export {
+  generateReferenceCompanyExportSnapshot,
+  type ReferenceCompanyExportSnapshot,
+  type ReferenceCompanyExportEmployee,
+  type ReferenceCompanyExportAppointment,
+} from "./company/reference-company-export";
